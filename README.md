@@ -180,6 +180,7 @@ KeyChange/
 ├── site.webmanifest    Installable app metadata.
 ├── robots.txt          Crawl rules.
 ├── sitemap.xml         One URL, zero surprises.
+├── LICENSE             MIT.
 ├── .nojekyll           Serve the repo as-is on GitHub Pages.
 └── assets/
     ├── og.png          The 1200×630 social card.
@@ -234,5 +235,5 @@ The native app lives in [`app/`](app/) next to the stage.
   <img src="favicon-192.png" width="34" alt="">
   <br>
   <sub><b>© 2026 KEYCHANGE — PLAY YOUR WORDS</b><br>
-  Made at 440Hz · <i>ppp → fff</i> · zero clack</sub>
+  Made at 440Hz · <i>ppp → fff</i> · zero clack · MIT</sub>
 </p>
