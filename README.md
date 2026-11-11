@@ -13,6 +13,7 @@
   <a href="https://abhinav-prabhakar.github.io/KeyChange/"><img alt="Live site" src="https://img.shields.io/badge/%E2%96%B6%20LIVE%20SITE-PLAY%20IT-ff2e1f?style=for-the-badge&labelColor=ff2e1f"></a>
   <img alt="No build step" src="https://img.shields.io/badge/NO%20BUILD-VANILLA%20JS-ffc700?style=for-the-badge&labelColor=ffc700">
   <img alt="Free forever" src="https://img.shields.io/badge/FREE-FOREVER-0e7a4f?style=for-the-badge&labelColor=0e7a4f">
+  <img alt="Rust + GPUI" src="https://img.shields.io/badge/NATIVE-RUST%20%2B%20GPUI-2233ff?style=for-the-badge&labelColor=2233ff">
 </p>
 
 <a href="https://abhinav-prabhakar.github.io/KeyChange/">
@@ -25,7 +26,7 @@
 
 **KeyChange** is a MIDI text instrument. Plug in a piano, play a letter, and watch it land in a live transcript. Hit a key harder and it gets **bolder**; tap soft and it turns *italic*. Sustain holds your spaces, three-note chords fire shortcuts, and the staff snaps sloppy playing into perfect spelling.
 
-This repository is the **landing page** — one hand-built page that is also a working toy. The native KeyChange app (macOS 14+ / Windows 11) is the next thing to live here.
+This repository holds both halves: the **landing page** — one hand-built page that is also a working toy — and the **native app**, a Rust + GPUI instrument that talks to real MIDI hardware and puts the entire instrument on a single screen.
 
 ---
 
@@ -39,6 +40,37 @@ This repository is the **landing page** — one hand-built page that is also a w
 | 🎼 **Staff → page** | Notes snap onto lines and become sentences. Bar lines are paragraphs. |
 | 🎲 **Quantize → autocorrect** | Sloppy hands, perfect spelling. `teh` becomes `the` in real time. |
 | ⌨️ **QWERTY fallback** | No piano? A–K still plays the on-screen keys, so the page works everywhere. |
+
+---
+
+## The native app
+
+<img src="app/assets/screenshot.png" alt="The KeyChange desktop instrument: transcript, staff, chord pads, piano keyboard and control deck on one cream screen" width="100%">
+
+The app is the same instrument with the theatre turned down: one calm screen,
+real MIDI input, and no browser in the middle. It is written in **Rust** with
+**GPUI** (the renderer behind Zed) and `midir`, so it starts instantly, runs
+offline, and reads any class-compliant MIDI keyboard.
+
+```bash
+cd app
+cargo run          # play, or press ⌘D to watch it play itself
+cargo test         # 46 tests over the engine and MIDI parser
+```
+
+Everything lives in one window: the transcript and staff, six word-chord pads,
+a fifteen-key piano with live heat strips, and a deck for sustain, soft,
+sostenuto, gate, mod wheel and velocity. The map (**Tab**) and gesture
+reference (**/**) are overlays you can ignore; playing never needs them.
+
+- **No hardware?** **⌘D** runs a simulated performance through the exact same
+  MIDI byte parser as a real piano.
+- **No mouse?** The whole instrument is playable from the computer keyboard.
+- **No clutter?** Numbers stay under hover; the screen is bars, keys and dots
+  until you ask for detail.
+
+Read [`app/README.md`](app/README.md) for the full gesture map, shortcuts,
+profile scoring and architecture.
 
 ---
 
@@ -131,6 +163,7 @@ KeyChange/
 ├── style.css           Risograph design system, layouts, responsive rules.
 ├── design.md           The written design system: tokens, components, audio, rules.
 ├── app.js              Sampled piano, Web MIDI, canvas piano roll, interactions.
+├── app/                Native instrument — Rust, GPUI, midir. See app/README.md.
 ├── favicon.svg         The mark, plus .ico / 32 / 192 / 512 / touch-icon exports.
 ├── site.webmanifest    Installable app metadata.
 ├── robots.txt          Crawl rules.
@@ -144,6 +177,8 @@ KeyChange/
 ```
 
 **Stack:** semantic HTML, hand-written CSS, vanilla JavaScript, Canvas 2D, Web Audio API, Web MIDI API, Google Fonts. The piano voice is a **Salamander Grand Piano V3** sampler (one sample every three semitones) with velocity-shaped filters, stereo spread, a convolution room, a master compressor and a measured tuning correction — plus an additive fallback if the samples can't load. The middle of the keyboard loads first; outer octaves arrive when the page is idle. No frameworks, no trackers, no cookies.
+
+**Native stack:** Rust, GPUI, `midir`, bundled OFL fonts. No Electron, no WebView, no runtime to install.
 
 **Polish included:** canonical URL, Open Graph and Twitter cards, JSON-LD `SoftwareApplication` schema, a full favicon family, web manifest, sitemap, `robots.txt`, and `prefers-*`-friendly type fallbacks.
 
@@ -172,12 +207,12 @@ GitHub Pages picks up the push in about a minute.
 ## What's next
 
 - [x] Landing page — the playable poster you're looking at
-- [ ] **The KeyChange app** — macOS 14+ / Windows 11, 4MB, MIDI in, QWERTY fallback
+- [x] **The KeyChange app** — macOS, Rust + GPUI, real MIDI in, QWERTY fallback, simulated player
+- [ ] Saved profiles — custom layouts that survive a restart
 - [ ] MIDI Learn — map any key to any character
-- [ ] More record-crate presets
 - [ ] Accessibility pass: full screen-reader pass and configurable targets
 
-The app will live in this same repository, next to the stage. Watch the repo to hear it first.
+The native app lives in [`app/`](app/) next to the stage.
 
 ---
 

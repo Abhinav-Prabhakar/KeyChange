@@ -1,0 +1,17 @@
+[package]
+name = "keychange-app"
+version = "0.2.0"
+edition = "2021"
+description = "KeyChange — a MIDI text instrument. Play your words loud."
+license = "MIT"
+
+[dependencies]
+gpui = "0.2.2"
+midir = "0.10"
+smol = "2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
