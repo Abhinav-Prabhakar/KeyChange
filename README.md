@@ -129,7 +129,8 @@ Then open <http://localhost:8099>. That's it.
 KeyChange/
 ├── index.html          One page. The whole gig.
 ├── style.css           Risograph design system, layouts, responsive rules.
-├── app.js              Web Audio synth, Web MIDI, canvas piano roll, interactions.
+├── design.md           The written design system: tokens, components, audio, rules.
+├── app.js              Sampled piano, Web MIDI, canvas piano roll, interactions.
 ├── favicon.svg         The mark, plus .ico / 32 / 192 / 512 / touch-icon exports.
 ├── site.webmanifest    Installable app metadata.
 ├── robots.txt          Crawl rules.
@@ -145,6 +146,8 @@ KeyChange/
 **Stack:** semantic HTML, hand-written CSS, vanilla JavaScript, Canvas 2D, Web Audio API, Web MIDI API, Google Fonts. The piano voice is a **Salamander Grand Piano V3** sampler (one sample every three semitones) with velocity-shaped filters, stereo spread, a convolution room, a master compressor and a measured tuning correction — plus an additive fallback if the samples can't load. The middle of the keyboard loads first; outer octaves arrive when the page is idle. No frameworks, no trackers, no cookies.
 
 **Polish included:** canonical URL, Open Graph and Twitter cards, JSON-LD `SoftwareApplication` schema, a full favicon family, web manifest, sitemap, `robots.txt`, and `prefers-*`-friendly type fallbacks.
+
+**Design system:** everything above is written down in [`design.md`](design.md) — palette and contrast pairs, type scale, spacing, z-index layers, every component, the piano map, the audio graph, motion and accessibility rules, plus checklists and known gaps. Read it before adding a section or a component; if you change the look or behaviour, update it in the same commit.
 
 ---
 
