@@ -31,7 +31,7 @@ This repository is the **landing page** — one hand-built page that is also a w
 
 ## The instrument
 
-| | |
+| On the keys | What happens |
 |---|---|
 | 🎹 **Plug in** | Any USB MIDI keyboard. Web MIDI, no drivers, no install. |
 | 🎚 **Velocity → emphasis** | Soft = *italic*. Medium = plain. Slam = **bold**. Fortissimo = highlight. |
@@ -178,7 +178,7 @@ The app will live in this same repository, next to the stage. Watch the repo to 
 ---
 
 <p align="center">
-  <img src="favicon.svg" width="34" alt="">
+  <img src="favicon-192.png" width="34" alt="">
   <br>
   <sub><b>© 2026 KEYCHANGE — PLAY YOUR WORDS</b><br>
   Made at 440Hz · <i>ppp → fff</i> · zero clack</sub>
