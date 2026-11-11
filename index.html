@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KeyChange — Type With Your Piano</title>
+<meta name="description" content="KeyChange turns any MIDI piano into a text instrument. Every key types, velocity sets bold, chords become shortcuts. Free forever. No account. No clack.">
+<meta name="keywords" content="MIDI keyboard, piano typing, MIDI text input, alternative keyboard, music notation, velocity typing, KeyChange">
+<meta name="author" content="Abhinav Prabhakar">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#17130c">
+<meta name="color-scheme" content="light">
+<link rel="canonical" href="https://abhinav-prabhakar.github.io/KeyChange/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="KeyChange">
+<meta property="og:url" content="https://abhinav-prabhakar.github.io/KeyChange/">
+<meta property="og:title" content="KeyChange — Type With Your Piano">
+<meta property="og:description" content="Your MIDI piano is your keyboard now. Every key types. Every chord shortcuts. Every song — a document.">
+<meta property="og:image" content="https://abhinav-prabhakar.github.io/KeyChange/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:alt" content="KeyChange — a cream risograph poster with a playable piano and the words PLAY YOUR words LOUD.">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="KeyChange — Type With Your Piano">
+<meta name="twitter:description" content="Your MIDI piano is your keyboard now. Every key types. Every chord shortcuts. Every song — a document.">
+<meta name="twitter:image" content="https://abhinav-prabhakar.github.io/KeyChange/assets/og.png">
+<meta name="twitter:image:alt" content="KeyChange landing page — playable piano, risograph colours, PLAY YOUR words LOUD.">
+
+<!-- Icons & app -->
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="apple-mobile-web-app-title" content="KeyChange">
+<meta name="application-name" content="KeyChange">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800;900&family=Anton&family=Archivo:wght@400;700;900&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://abhinav-prabhakar.github.io/KeyChange/#website",
+      "url": "https://abhinav-prabhakar.github.io/KeyChange/",
+      "name": "KeyChange",
+      "description": "A MIDI text instrument. Play your words loud.",
+      "inLanguage": "en-US"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://abhinav-prabhakar.github.io/KeyChange/#app",
+      "name": "KeyChange",
+      "url": "https://abhinav-prabhakar.github.io/KeyChange/",
+      "description": "KeyChange turns any MIDI piano into a keyboard. Every key types a character, velocity controls boldness, chords fire shortcuts, and sustain holds your spaces.",
+      "applicationCategory": "MusicApplication",
+      "applicationSubCategory": "Text input",
+      "operatingSystem": "macOS 14+, Windows 11",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "screenshot": "https://abhinav-prabhakar.github.io/KeyChange/assets/og.png",
+      "featureList": [
+        "Type with any MIDI piano",
+        "Velocity maps to bold and italic",
+        "Three-note chords act as shortcuts",
+        "Sustain pedal types spaces",
+        "Staff view turns notes into sentences",
+        "Quantize snaps typos to the grid"
+      ],
+      "sameAs": ["https://github.com/Abhinav-Prabhakar/KeyChange"]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-top">KEYCHANGE PRESENTS</div>
+    <div class="loader-big" id="loaderWord">TUNING…</div>
+    <div class="loader-bar"><span id="loaderFill"></span></div>
+    <div class="loader-sub">A=440Hz · VELOCITY CHECK · PEDAL CHECK</div>
+  </div>
+</div>
+<div class="cursor" id="cursor"></div><div class="cursor-ring" id="cursorRing"></div>
+<canvas id="dust" aria-hidden="true"></canvas>
+<div class="grain" aria-hidden="true"></div>
+<div style="position:fixed;left:10px;top:45%;z-index:40;transform:rotate(-90deg);transform-origin:left center" class="mono hide-m"><span style="background:#17130c;color:#f6edda;padding:6px 12px;border:2px solid #17130c">★ SIDE A — TYPE ★ SIDE B — PLAY ★</span></div>
+
+<header id="topbar">
+  <a class="brand" href="#top"><span class="brand-box">KEYCHANGE</span><sup>v2.4</sup></a>
+  <nav class="top-nav hide-m" aria-label="Sections"><a href="#how">Soundcheck</a><a href="#play">Playground</a><a href="#pedals">Pedals</a><a href="#chords">Chords</a><a href="#staff">Spelling</a></nav>
+  <div class="top-right">
+    <span id="midiDot" class="midi-dot">○ NO MIDI</span>
+    <a href="#encore" class="btn-ticket">GET TICKET ↓</a>
+  </div>
+</header>
+
+<main id="top">
+<!-- HERO : the instrument IS the hero -->
+<section class="hero">
+  <div class="stage-light"></div>
+  <div class="starburst s1"><span>100%<br>PIANO<br>NO CLACK!</span></div>
+  <div class="starburst s2"><span>★<br>PLAY<br>LOUD</span></div>
+  <div class="staff-bg" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="hero-top mono"><span>◉ REC • MIDI TEXT INSTRUMENT v2.4</span><span id="bpmTop">♪ 120 BPM — 0 WPM</span><span class="hide-m">LATENCY 1.2MS</span></div>
+
+  <div class="hero-main">
+    <div class="hero-eyebrow"><span class="pill">✦ FOR PIANISTS WHO TYPE</span><span class="pill ghost">PLUG • PLAY • TYPE</span></div>
+    <h1 class="headline" id="headline">
+      <span class="line l1"><em>PLAY</em> <span class="outlined">YOUR</span></span>
+      <span class="line l2"><span class="italic serif">words</span> <span class="note-chip">♪</span> <em>LOUD</em><span class="dot">.</span></span>
+    </h1>
+    <p class="hero-sub">Your MIDI piano <b>is</b> your keyboard now. Every key types. Every chord shortcuts. Every song — a document.</p>
+
+    <div class="hero-console">
+      <div class="typed-wrap">
+        <div class="typed-label mono">LIVE TRANSCRIPT — HIT KEYS A→K OR CLICK PIANO ↓</div>
+        <div class="typed-line"><span id="typedOutput" class="typed-output"><span class="caret-blink">|</span></span></div>
+        <div class="hero-meters mono"><span>WPM <b id="wpmVal">0</b></span><span>VELOCITY <b id="velVal">mf</b></span><span>OCTAVE <b id="octVal">C4</b></span><span class="metro"><i id="metroDot"></i> METRONOME <button id="metroBtn">OFF</button></span></div>
+      </div>
+      <div class="hero-actions"><button class="btn big" id="ctaHear">▶ HEAR IT TYPE</button><button class="btn ghost big" id="ctaConnect">⌁ CONNECT PIANO</button></div>
+    </div>
+  </div>
+
+  <div class="piano-stage">
+    <canvas id="wave"></canvas>
+    <div class="piano-wrap kc-piano">
+      <div class="piano-fall-hint">CLICK LOW ON A KEY = HIT IT HARDER = CAPS / <b>BOLD</b></div>
+      <div class="piano-controls mono">
+        <span class="oct-switch">
+          <button data-oct="0" class="oct active">C1 · abc</button><button data-oct="1" class="oct">C2 · ABC</button><button data-oct="2" class="oct">C3 · 123!?</button>
+        </span>
+        <span class="piano-btns"><button id="octDown">◀ OCT</button><button id="susBtn">SUSTAIN ⏻ SPACE</button><button id="octUp">OCT ▶</button><button id="clearBtn">CLEAR</button><button id="backBtn">⌫ BEND</button><button id="soundBtn" class="on">♪ ON</button></span>
+      </div>
+      <div class="piano" id="piano" role="application" aria-label="Playable piano typer"></div>
+      <div class="pedal-bar"><div class="pedal" id="pedalVis"></div><span class="mono">SUSTAIN PEDAL = SPACEBAR — HOLD IT · VELOCITY <b id="velNum2">80</b> · <span class="vel-track"><span id="velFill"></span></span></span></div>
+      <div class="piano-foot"><span>⌨ YOUR QWERTY ALSO PLAYS IT (A–K)</span><span class="hide-m">⌁ PLUG A REAL MIDI KEYBOARD IN — <a href="#plug">SECTION ⑫</a> — IT JUST WORKS</span></div>
+    </div>
+  </div>
+  <div class="scroll-hint mono">SCROLL FOR OVERTURE ↓</div>
+</section>
+
+<div class="ticker"><div class="ticker-track" id="tickerTrack"></div></div>
+
+<!-- MANIFESTO crescendo text -->
+<section class="manifesto reveal"><div class="kicker mono">♪ OVERTURE — THE IDEA</div><h2 id="maniText">Typing was never meant to clack. It was meant to sing. So we tuned every letter, gave punctuation rhythm, and turned QWERTY into an instrument.</h2><div class="mani-meta mono"><span>pp ————— cresc. ————→ ff</span><span>DYNAMICS = EMPHASIS</span></div></section>
+
+<!-- HOW : mixer -->
+<section class="panel" id="how"><div class="kicker mono">01 / SOUNDCHECK — HOW IT WORKS</div><h2 class="sec-title">Three faders.<br><span class="serif italic">Zero learning curve.</span></h2>
+<div class="mixer">
+  <div class="channel reveal"><div class="ch-top mono">CH-01 • PLUG</div><div class="ch-icon">🔌</div><h3>Plug your piano</h3><p>USB MIDI. No drivers. Browser hears it in 1.2ms.</p><div class="fader"><i style="--v:85%"></i></div><div class="mono ch-val">GAIN +8dB</div></div>
+  <div class="channel reveal"><div class="ch-top mono">CH-02 • MAP</div><div class="ch-icon">🎛</div><h3>Map keys → letters</h3><p>C4 = A, D4 = S… or load Chopin, Jazz, Coder presets.</p><div class="fader"><i style="--v:62%"></i></div><div class="mono ch-val">TUNE 440Hz</div></div>
+  <div class="channel reveal"><div class="ch-top mono">CH-03 • PERFORM</div><div class="ch-icon">🎹</div><h3>Perform text</h3><p>Type essays with glissandos. Delete with a smash.</p><div class="fader"><i style="--v:96%"></i></div><div class="mono ch-val">MASTER 0dB</div></div>
+</div></section>
+
+<!-- PLAYGROUND piano roll -->
+<section class="panel dark" id="play"><div class="kicker mono">02 / PIANO ROLL — LIVE PLAYGROUND</div><h2 class="sec-title">Your words, <span class="serif italic">as music.</span></h2>
+<div class="roll-grid">
+  <div class="roll-main"><canvas id="roll"></canvas><div class="roll-overlay mono"><span>◉ DAW VIEW — EACH KEYSTROKE IS A NOTE BLOCK</span><span><button id="clearRoll">CLEAR TAPE</button></span></div></div>
+  <aside class="roll-side">
+    <div class="vu-card"><div class="mono">EQ — LETTER FREQUENCY</div><div class="eq" id="eq"></div></div>
+    <div class="vu-card"><div class="mono">VELOCITY = BOLDNESS — HIT HARDER, TYPE BOLDER</div><input type="range" id="velSlider" aria-label="Velocity (boldness)" min="20" max="127" value="90"><div class="vel-demo" id="velDemo">Forte!</div></div>
+    <div class="vu-card"><div class="mono">WAVEFORM — YOUR TYPING VOICE</div><canvas id="wave2" height="60"></canvas></div>
+  </aside>
+</div></section>
+
+<!-- PEDALS -->
+<section class="panel" id="pedals"><div class="kicker mono">03 / PEDALBOARD — EVERY KEY DOES MORE</div><h2 class="sec-title">Stompboxes <span class="serif italic">for typing.</span></h2>
+<div class="pedals">
+  <div class="pedalbox reveal"><span class="led"></span><div class="knobs"><i></i><i></i><i></i></div><h3>🎼 Staff → Page</h3><p>Notes snap onto lines, become sentences. Bar lines = paragraphs.</p><div class="mini-staff"><i></i><i></i><i></i>♪ 𝄞 hello world</div><span class="foot">SHIFT</span></div>
+  <div class="pedalbox reveal"><span class="led on"></span><div class="knobs"><i></i><i></i><i></i></div><h3>🔨 Velocity → Bold</h3><p>Tap soft = light. Slam = <b>bold</b>. Aftertouch = <i>italic</i>.</p><div class="velbars"><i style="--h:30%"></i><i style="--h:60%"></i><i style="--h:100%"></i></div><span class="foot">VELOCITY</span></div>
+  <div class="pedalbox reveal"><span class="led"></span><div class="knobs"><i></i><i></i><i></i></div><h3>🦶 Sustain → Space</h3><p>Hold the pedal, hold the space. Legato typing, no gaps.</p><button class="mini-btn" id="susDemo">HOLD TO SUSTAIN</button><span class="foot">SUSTAIN</span></div>
+  <div class="pedalbox reveal"><span class="led on"></span><div class="knobs"><i></i><i></i><i></i></div><h3>🎶 Arpeggio → Autocomplete</h3><p>Play a ripple, finish a word. <span class="mono">hel + ≋ = hello</span></p><button class="mini-btn" id="arpDemo">▶ RUN ARPEGGIO</button><span class="foot">ARPEGGIO</span></div>
+  <div class="pedalbox reveal"><span class="led"></span><div class="knobs"><i></i><i></i><i></i></div><h3>⏱ Tempo → WPM</h3><p>Metronome grades your flow. Stay on beat, type 140 WPM.</p><div class="mono" id="tempoRead">♪ 120 BPM • 0 WPM</div><span class="foot">TEMPO</span></div>
+  <div class="pedalbox reveal"><span class="led on"></span><div class="knobs"><i></i><i></i><i></i></div><h3>🧲 Quantize → Autocorrect</h3><p>Sloppy timing? We snap typos to the grid. Wrong note, right word.</p><div class="mono">teh → the ✓</div><span class="foot">QUANTIZE</span></div>
+</div></section>
+
+<!-- CHORDS -->
+<section class="panel dark" id="chords"><div class="kicker mono">04 / CHORD CHART — SHORTCUTS YOU CAN HEAR</div><h2 class="sec-title">One finger types.<br><span class="serif italic">Three fingers command.</span></h2>
+<p class="lede">Hold any 3 piano keys together = instant shortcut. Chords are hotkeys with harmony.</p>
+<div class="chord-grid">
+  <button class="chord reveal" data-keys="C,E,G"><span class="chord-notes"><i></i><i></i><i></i></span><b>C major</b><span class="mono">⌘C • COPY</span></button>
+  <button class="chord reveal" data-keys="G,B,D"><span class="chord-notes"><i></i><i></i><i></i></span><b>G major</b><span class="mono">⌘V • PASTE</span></button>
+  <button class="chord reveal" data-keys="F,A,C"><span class="chord-notes"><i></i><i></i><i></i></span><b>F major</b><span class="mono">⌘S • SAVE</span></button>
+  <button class="chord reveal" data-keys="A,C,E"><span class="chord-notes"><i></i><i></i><i></i></span><b>A minor</b><span class="mono">⌘Z • UNDO</span></button>
+  <button class="chord reveal" data-keys="D,F#,A"><span class="chord-notes"><i></i><i></i><i></i></span><b>D major</b><span class="mono">⏎ ENTER</span></button>
+  <button class="chord reveal" data-keys="E,G#,B"><span class="chord-notes"><i></i><i></i><i></i></span><b>E major</b><span class="mono">␣ SPACE</span></button>
+</div>
+<div class="toast mono" id="chordToast">PRESS 3 PIANO KEYS TOGETHER — OR CLICK A CHORD ↑</div>
+<div class="wheel-wrap reveal"><div class="wheel" id="wheel"></div><div class="wheel-center">CIRCLE<br>OF<br><b>SHORTCUTS</b></div></div>
+</section>
+
+<!-- PRESETS vinyl -->
+<section class="panel" id="presets"><div class="kicker mono">05 / RECORD CRATE — LAYOUT PRESETS</div><h2 class="sec-title">Flip the record. <span class="serif italic">Flip the layout.</span></h2>
+<div class="crate">
+  <div class="vinyl reveal"><div class="disc d1"><span></span></div><b>CHOPIN CLASSICAL</b><span class="mono">A= C4 … L= C6 • legato</span></div>
+  <div class="vinyl reveal"><div class="disc d2"><span></span></div><b>BLUE NOTE JAZZ</b><span class="mono">black keys = !@#$%</span></div>
+  <div class="vinyl reveal"><div class="disc d3"><span></span></div><b>LOFI CODER</b><span class="mono">{};() mapped to octaves</span></div>
+  <div class="vinyl reveal"><div class="disc d4"><span></span></div><b>8-BIT GAMER</b><span class="mono">WASD on C-D-E-F</span></div>
+</div></section>
+
+<!-- ============ ⑪ / QUANTIZE = AUTOCORRECT · STAFF = SENTENCES ============ -->
+<section id="staff" class="kc-section reveal">
+  <div class="sec-label">⑪ / QUANTIZE = AUTOCORRECT · STAFF = SENTENCES</div>
+  <h2 class="mega sm">SLOPPY HANDS,<br><span class="hl-y">PERFECT SPELLING.</span></h2>
+  <div class="staff-demo">
+    <div class="staff-row"><span class="clef">𝄞</span><span class="note-word">helooo <s>helooo</s> <b>hello 𝄢 snapped!</b></span><span class="barline"></span><span class="note-word">wrld <s>wrld</s> <b>world 𝄢 snapped!</b></span></div>
+    <p class="lede">Quantize pulls every wobbly note — and every typo — onto the grid. In real time. In key. In spelling.</p>
+    <div class="staff-try mono">TRY IT — TYPE <b>TEH</b> ON THE PIANO ABOVE ↑ IT SNAPS TO <b>THE</b> ✓</div>
+  </div>
+</section>
+
+<!-- ============ ⑫ / PLUG IN YOUR AXE ============ -->
+<section id="plug" class="kc-section dark reveal">
+  <div class="sec-label light">⑫ / SOUNDCHECK — PLUG IN YOUR AXE</div>
+  <h2 class="mega sm light">GOT KEYS?<br><span class="hl-y">PLUG ’EM IN.</span></h2>
+  <div class="plug-box">
+    <div class="cable">🔌 ─────── <span id="cablePulse">· · ·</span> ────── 🎹</div>
+    <button id="midiBtn">ENABLE WEB MIDI</button>
+    <p id="midiStatus">No device yet — the on-screen piano above already works. Real keyboards map 1:1.</p>
+  </div>
+  <div class="chip-row"><span class="chip">✓ Akai MPK</span><span class="chip">✓ Arturia KeyLab</span><span class="chip">✓ Novation Launchkey</span><span class="chip">✓ Any $40 thing from the internet</span><span class="chip">MIDI CHANNELS = APPS: CH1 notes · CH10 drums·emoji</span></div>
+</section>
+
+<!-- ============ ⑬ / TONIGHT'S SETLIST ============ -->
+<section id="setlist" class="kc-section reveal">
+  <div class="sec-label">⑬ / TONIGHT’S SETLIST — WHO’S IT FOR</div>
+  <h2 class="mega sm">PICK YOUR<br><span class="stroke">VENUE.</span></h2>
+  <div class="set-grid">
+    <div class="set-card"><b>A1</b><h3>PRODUCERS</h3><p>Reply to emails without leaving the keys. Ever.</p><span>♪♪♪♪○ energy</span></div>
+    <div class="set-card"><b>A2</b><h3>LIVE CODERS</h3><p>Algorave your standup notes. Ship at 140 BPM.</p><span>♪♪♪♪♪ energy</span></div>
+    <div class="set-card"><b>A3</b><h3>WRITERS</h3><p>Drafts with dynamics. Whisper scenes, SHOUT climaxes.</p><span>♪♪♪○○ energy</span></div>
+    <div class="set-card"><b>A4</b><h3>ACCESSIBILITY</h3><p>Big targets, soft touch, whole words from one note.</p><span>♪♪♪♪♪ energy</span></div>
+  </div>
+</section>
+
+<!-- ============ ⑭ / ENCORE ============ -->
+<section id="encore" class="kc-section reveal">
+  <div class="ticket" id="ticket">
+    <div class="ticket-stub">ADMIT ONE ★ ADMIT ONE ★ ADMIT ONE</div>
+    <div class="ticket-main">
+      <div class="sec-label">⑭ / ENCORE — GET KEYCHANGE</div>
+      <h2 class="mega sm">STOP TYPING.<br>START <span class="hl-r">PERFORMING.</span></h2>
+      <div class="cta-row">
+        <a class="btn-big" href="#" id="dlBtn">⬇ DOWNLOAD — FREE FOREVER</a>
+        <span class="free-tag">FREE • NO ACCOUNT • NO PAYWALL</span>
+      </div>
+      <small>MACOS 14+ · WINDOWS 11 · 4MB · NO ACCOUNT · MIDI IN · QWERTY FALLBACK · FREE FOREVER</small>
+      <div class="mono fin-note" style="margin-top:14px">FREE FOREVER • 88 KEYS • ONE STANDING OVATION</div>
+      <div class="confetti" id="confetti"></div>
+    </div>
+  </div>
+  <footer class="kc-footer">
+    <span>© 2026 KEYCHANGE — PLAY YOUR WORDS</span>
+    <span class="hide-m">MADE AT 440Hz · <em>ppp → fff</em></span>
+    <a href="#top">BACK TO STAGE ↑</a>
+  </footer>
+</section>
+</main>
+
+<div id="toast"></div>
+<div class="pitch-progress" id="pitchProgress"></div>
+<script src="app.js"></script>
+</body>
+</html>
