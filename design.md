@@ -370,6 +370,7 @@ Every content section follows one of two shells:
 | ⑪ | `#staff` | Quantize / staff | paper | Before/after spelling staff |
 | ⑫ | `#plug` | Plug in your axe | dark | Enable Web MIDI, live status, cable pulse |
 | ⑬ | `#setlist` | Tonight’s setlist | paper | Four audience cards |
+| ⑮ | `#huffman` | Huffman piano | dark | Three word-macro chords, layer/velocity/timing chips, desktop app note |
 | ⑭ | `#encore` | Encore / download | paper ticket | Tilting ticket, demo download, confetti, footer |
 
 The jump from **05** to **⑪** is intentional setlist humour, not a bug. Do not renumber
@@ -987,6 +988,7 @@ These are real, current deviations — fix them deliberately, not accidentally.
 | Date | Change |
 |---|---|
 | 2026-11-11 | Initial design system: brand, tokens, components, piano, audio, motion, accessibility, metadata, checklists, known gaps. Verified against commit `4ec1da6`. |
+| 2026-11-11 | Add ⑮ Huffman piano section (dark): word-macro chords the/and + interval bigrams, layer/velocity/timing chips, ticker updated to Huffman mappings, desktop Rust+GPUI mock lives in `app/`. |
 
 When you change the design, add a row here with the date and a one-line summary.
 

@@ -21,8 +21,8 @@ const glyphs=['♪','♫','♩','♬','𝄞','·','a','e','o','C','G'];
 for(let i=0;i<70;i++)parts.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,s:Math.random()*18+8,v:Math.random()*.4+.1,o:Math.random()*.35+.05,g:glyphs[i%glyphs.length]});
 (function dustLoop(){dctx.clearRect(0,0,dust.width,dust.height);parts.forEach(p=>{p.y-=p.v;p.x+=Math.sin(p.y/90)*.2;if(p.y<-30){p.y=innerHeight+20;p.x=Math.random()*innerWidth}dctx.globalAlpha=p.o;dctx.fillStyle='#17130c';dctx.font='900 '+p.s+'px serif';dctx.fillText(p.g,p.x,p.y)});dctx.globalAlpha=1;requestAnimationFrame(dustLoop)})();}
 
-// ticker
-const items=['C MAJOR = COPY ⌘C','G MAJOR = PASTE ⌘V','F MAJOR = SAVE ⌘S','SUSTAIN PEDAL = SPACEBAR','VELOCITY = BOLD','OCTAVE = CAPS LOCK','ARPEGGIO = AUTOCOMPLETE','TEMPO = WPM','QUANTIZE = AUTOCORRECT','BLACK KEYS = SYMBOLS','GLISSANDO = DELETE SENTENCE','88 KEYS • ZERO CLACK • FREE FOREVER •'];
+// ticker — Huffman + layers + pedals, mirrors the desktop app formula
+const items=['C4 = E · D4 = T · E4 = A','C4+E4 = TH · D4+F4 = HE','C+E+G = THE · D+F+A = AND','OCTAVE = MODE · C2 letters · C3 CAPS · C4 123!?','VELOCITY pp → ff · SOFT = lowercase · HARD = BOLD','SUSTAIN = SHIFT · SOFT = CTRL · SOST = ALT','MINOR 2ND = bigram · FIFTH = word · OCTAVE = repeat','ARPEGGIO = AUTOCOMPLETE · MOD WHEEL = candidates','C MAJOR = COPY ⌘C','G MAJOR = PASTE ⌘V','SUSTAIN PEDAL = SPACEBAR','QUANTIZE = AUTOCORRECT','88 KEYS • ZERO CLACK • FREE FOREVER •'];
 const tt=$('#tickerTrack');if(tt)tt.innerHTML=(items.concat(items).map(t=>`&nbsp;&nbsp;✦&nbsp;&nbsp;${t}`).join(''));
 
 // audio — sampled Salamander grand piano, with an additive fallback
