@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://abhinav-prabhakar.github.io/KeyChange/"><img alt="Live site" src="https://img.shields.io/badge/%E2%96%B6%20LIVE%20SITE-PLAY%20IT-ff2e1f?style=for-the-badge&labelColor=17130c"></a>
-  <img alt="No build step" src="https://img.shields.io/badge/NO%20BUILD-VANILLA%20JS-ffc700?style=for-the-badge&labelColor=17130c">
-  <img alt="Free forever" src="https://img.shields.io/badge/FREE-FOREVER-0e7a4f?style=for-the-badge&labelColor=17130c">
+  <a href="https://abhinav-prabhakar.github.io/KeyChange/"><img alt="Live site" src="https://img.shields.io/badge/%E2%96%B6%20LIVE%20SITE-PLAY%20IT-ff2e1f?style=for-the-badge&labelColor=ff2e1f"></a>
+  <img alt="No build step" src="https://img.shields.io/badge/NO%20BUILD-VANILLA%20JS-ffc700?style=for-the-badge&labelColor=ffc700">
+  <img alt="Free forever" src="https://img.shields.io/badge/FREE-FOREVER-0e7a4f?style=for-the-badge&labelColor=0e7a4f">
 </p>
 
 <a href="https://abhinav-prabhakar.github.io/KeyChange/">
