@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon-1024.png" width="96" alt="KeyChange app icon — a black eighth note on a yellow tile">
+</p>
+
 # KeyChange for the desktop
 
 A native MIDI text instrument in one window. Plug in a piano, play a letter, and
@@ -11,12 +15,26 @@ step, no account.
 
 <img src="assets/screenshot.png" alt="The KeyChange desktop instrument after a simulated performance — the transcript reads “the and you that have with the hello”, with a staff of notes and the NOW tile showing the current word" width="100%">
 
-## Run it
+## Install it
+
+**Download** the latest `KeyChange-0.3.0.dmg` from the
+[Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases) page, open it,
+and drag **KeyChange** into Applications.
+
+The build is ad-hoc signed but not notarised yet, so the first launch needs
+right-click → **Open** (or System Settings → Privacy & Security → **Open Anyway**).
+
+### Build from source
 
 ```bash
 cd app
-cargo run
+cargo run          # development build
+make app           # KeyChange.app in app/dist/
+make dmg           # KeyChange-0.3.0.dmg in app/dist/
 ```
+
+`cargo run` is the fastest loop. The bundle adds the icon, the proper app name
+in the menu bar, and a stable settings location.
 
 Press **⌘D** (or click **DEMO**) to hear the instrument play itself. The
 simulated player emits real MIDI bytes through the same parser as hardware, so
@@ -35,6 +53,7 @@ not required steps.
 | Region | What it does |
 |---|---|
 | **Toolbar** | Layer switch (`abc / ABC / 123`), live CC lights, profile picker, MIDI status, demo, shortcuts. |
+| **Overlays** | **Tab** — the Huffman map. **/** — every gesture. **⌘,** — MIDI Learn. |
 | **Score** | The transcript, a 20-note staff, and the right rail: NOW (note / interval / chord), WPM and a wheel history. Hover any key or pad to reveal numbers in the rail. |
 | **Chord pads** | Six triads — `the and you that have with` — each showing its three keys and its share of English. Click or play them. |
 | **Keyboard** | Fifteen white keys (Huffman letters) and ten black keys (punctuation), with heat strips, live held-note rings and per-key velocity. |
@@ -78,6 +97,7 @@ the instrument forgiving of rolled chords without ever swallowing a fast run.
 | `Tab` | Toggle the map overlay |
 | `/` | Toggle the gesture reference |
 | `⌘D` | Start / stop the simulated performance |
+| `⌘,` | Open / close MIDI Learn |
 | `⌘C` | Copy the transcript |
 | `⌘Z` | Undo the last edit |
 | `⌘K` | Clear the score |
@@ -94,8 +114,29 @@ effort, and a live quality score. **Duplicate** clones the active layout into a
 custom profile; **Remap** swaps two white keys by clicking their columns. Score
 is `Σ frequency × effort`, so layouts can be compared against the optimum.
 
-Custom profiles are in-memory only — persistence and a per-key character picker
-are the next step.
+Layouts, the active profile, layer, velocity, gate and learned CCs are saved to
+`~/Library/Application Support/KeyChange/settings.json` (XDG paths on Linux) and
+restored on launch. A corrupt file is moved aside rather than blocking startup.
+
+## MIDI Learn
+
+Open **⌘,**. Every control the app listens for is listed with its current CC:
+
+<img src="assets/screenshot-learn.png" alt="MIDI Learn panel listing sustain, soft, sostenuto, expression, mod wheel and panic with their CC numbers" width="100%">
+
+| Control | Default | What it does |
+|---|---|---|
+| Sustain | 64 | Hold word gaps |
+| Soft | 67 | Cycle the layer |
+| Sostenuto | 66 | Delete the last word |
+| Expression | 11 | Set the gate, 40–240 ms |
+| Mod wheel | 1 | Scrub completions |
+| Panic | 123 | Release every note |
+
+Hit **LEARN**, move the pedal or knob, and the number is captured. Learning a
+number that already belongs to another control swaps the two, so the map never
+ends up with two owners for one knob. **RESET TO DEFAULTS** restores the spec
+numbers. Aftertouch is fixed to *accept completion*; pitch bend always scrubs.
 
 ## How it is built
 
@@ -108,8 +149,9 @@ app/
 │   ├── midi.rs      Raw byte parser, MidiHub with reconnecting hardware input,
 │   │                and the simulated player. Hardware and demo share a path.
 │   └── ui.rs        The single-screen GPUI view, overlays and all interactions.
-├── assets/fonts/    Unbounded, Space Grotesk, JetBrains Mono, Instrument Serif
-│                    (OFL, licences included).
+├── assets/          App icon (SVG + ICNS), fonts (OFL, licences included).
+├── scripts/         bundle.sh, dmg.sh, make-icon.sh.
+├── Info.plist       Bundle identity, version, icon, macOS metadata.
 └── Cargo.toml
 ```
 
@@ -127,18 +169,20 @@ no font dependency on the OS.
 cargo test
 ```
 
-46 tests cover the parts that are easy to break: velocity buckets, layer
+54 tests cover the parts that are easy to break: velocity buckets, layer
 precision, chord timing, interval and octave gestures, sustain gaps, quantize
-and candidate acceptance, WPM, undo/delete, profile scoring and remapping, MIDI
-byte parsing, and the demo script. The UI is verified by screenshot, not by
-unit test.
+and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC
+routing and learning, settings round-trips and repair, MIDI byte parsing, and
+the demo script. The UI is verified by screenshot, not by unit test.
 
 ## Known rough edges
 
-- Custom profiles do not persist between launches.
-- MIDI Learn is not implemented; the map is fixed per profile.
+- The macOS build is ad-hoc signed, not notarised. First launch needs
+  right-click → **Open**.
+- Linux and Windows builds are untested; the app currently targets macOS.
 - The simulation is a fixed script, not a generative player.
-- Linux and Windows builds are untested.
+- There is no per-key character picker yet — MIDI Learn reprograms controls,
+  not letters.
 
 ---
 

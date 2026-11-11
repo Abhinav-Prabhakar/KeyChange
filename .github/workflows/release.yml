@@ -1,0 +1,37 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      - name: Test
+        working-directory: app
+        run: cargo test
+      - name: Build the disk image
+        working-directory: app
+        run: bash scripts/dmg.sh
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/dist/KeyChange-*.dmg
+          generate_release_notes: true
+          body: |
+            **KeyChange ${{ github.ref_name }}**
+
+            Drag **KeyChange.app** into Applications, then open it. The build is
+            ad-hoc signed but not notarised, so the first launch needs
+            right-click → **Open** (or System Settings → Privacy & Security → **Open Anyway**).
+
+            No piano? Press **⌘D** to hear the simulated keyboard.

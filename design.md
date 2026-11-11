@@ -989,6 +989,7 @@ These are real, current deviations — fix them deliberately, not accidentally.
 |---|---|
 | 2026-11-11 | Initial design system: brand, tokens, components, piano, audio, motion, accessibility, metadata, checklists, known gaps. Verified against commit `4ec1da6`. |
 | 2026-11-11 | Add ⑮ Huffman piano section (dark): word-macro chords the/and + interval bigrams, layer/velocity/timing chips, ticker updated to Huffman mappings, desktop Rust+GPUI mock lives in `app/`. |
+| 2026-11-12 | Native app ships at 0.3.0: app icon, DMG bundle, saved layouts, MIDI Learn. App chrome follows A.6 (calm density, no poster theatre). |
 
 When you change the design, add a row here with the date and a one-line summary.
 

@@ -52,10 +52,19 @@ real MIDI input, and no browser in the middle. It is written in **Rust** with
 **GPUI** (the renderer behind Zed) and `midir`, so it starts instantly, runs
 offline, and reads any class-compliant MIDI keyboard.
 
+<p align="center">
+  <a href="https://github.com/Abhinav-Prabhakar/KeyChange/releases/latest"><img alt="Download KeyChange for macOS" src="https://img.shields.io/badge/DOWNLOAD-macOS%20DMG-ff2e1f?style=for-the-badge&labelColor=ff2e1f"></a>
+</p>
+
+Open the DMG, drag **KeyChange** into Applications, and play. First launch needs
+right-click → **Open** because the build is ad-hoc signed, not notarised yet.
+
 ```bash
 cd app
-cargo run          # play, or press ⌘D to watch it play itself
-cargo test         # 46 tests over the engine and MIDI parser
+cargo run          # development build, ⌘D plays the simulation
+make app           # KeyChange.app with icon
+make dmg           # drag-to-Applications disk image
+cargo test         # 54 tests over the engine, MIDI and settings
 ```
 
 Everything lives in one window: the transcript and staff, six word-chord pads,
@@ -68,6 +77,9 @@ reference (**/**) are overlays you can ignore; playing never needs them.
 - **No mouse?** The whole instrument is playable from the computer keyboard.
 - **No clutter?** Numbers stay under hover; the screen is bars, keys and dots
   until you ask for detail.
+- **Your pedals, your numbers.** **⌘,** opens MIDI Learn; move a pedal and the
+  app captures its CC. Layouts, velocity, gate and CCs survive a restart.
+- **A real app.** Proper icon, `KeyChange.app` bundle, and a drag-to-install DMG.
 
 Read [`app/README.md`](app/README.md) for the full gesture map, shortcuts,
 profile scoring and architecture.
@@ -163,7 +175,7 @@ KeyChange/
 ├── style.css           Risograph design system, layouts, responsive rules.
 ├── design.md           The written design system: tokens, components, audio, rules.
 ├── app.js              Sampled piano, Web MIDI, canvas piano roll, interactions.
-├── app/                Native instrument — Rust, GPUI, midir. See app/README.md.
+├── app/                Native instrument — Rust, GPUI, midir, app icon, DMG scripts.
 ├── favicon.svg         The mark, plus .ico / 32 / 192 / 512 / touch-icon exports.
 ├── site.webmanifest    Installable app metadata.
 ├── robots.txt          Crawl rules.
@@ -208,8 +220,10 @@ GitHub Pages picks up the push in about a minute.
 
 - [x] Landing page — the playable poster you're looking at
 - [x] **The KeyChange app** — macOS, Rust + GPUI, real MIDI in, QWERTY fallback, simulated player
-- [ ] Saved profiles — custom layouts that survive a restart
-- [ ] MIDI Learn — map any key to any character
+- [x] Saved profiles — custom layouts, velocity, gate and CCs survive a restart
+- [x] MIDI Learn — teach the app any sustain pedal or expression knob
+- [ ] Notarised release — first launch without the right-click dance
+- [ ] Per-key character picker — remap letters as well as controls
 - [ ] Accessibility pass: full screen-reader pass and configurable targets
 
 The native app lives in [`app/`](app/) next to the stage.

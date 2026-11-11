@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="KeyChange">
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd633"/>
+      <stop offset="0.62" stop-color="#ffc700"/>
+      <stop offset="1" stop-color="#f2b400"/>
+    </linearGradient>
+    <filter id="drop" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#17130c" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#drop)">
+    <rect x="104" y="92" width="816" height="816" rx="184" fill="#17130c"/>
+    <rect x="128" y="116" width="768" height="768" rx="160" fill="url(#face)"/>
+  </g>
+
+  <g transform="translate(73.14 65.14) scale(13.714)" fill="#17130c">
+    <ellipse cx="25" cy="45" rx="10" ry="7.4" transform="rotate(-20 25 45)"/>
+    <rect x="32.5" y="12" width="6.5" height="33"/>
+    <path d="M39 12c9 2.6 13.5 8.4 13.5 17.5-3.6-6.2-8-9.4-13.5-10.6z"/>
+  </g>
+
+  <circle cx="279" cy="284" r="47" fill="#ff2e1f" stroke="#17130c" stroke-width="22"/>
+</svg>
