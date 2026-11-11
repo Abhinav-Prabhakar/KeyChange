@@ -2886,10 +2886,12 @@ dependencies = [
 
 [[package]]
 name = "keychange-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "gpui",
  "midir",
+ "serde",
+ "serde_json",
  "smol",
 ]
 

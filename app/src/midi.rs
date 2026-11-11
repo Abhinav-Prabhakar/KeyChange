@@ -270,7 +270,7 @@ pub fn run_demo(tx: Sender<Packet>, cancel: Arc<AtomicBool>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::{Engine, WHITE_MIDI, BLACK_MIDI};
+    use crate::engine::{Engine, BLACK_MIDI, WHITE_MIDI};
 
     fn feed(engine: &mut Engine, bytes: &[u8], now: u64) {
         match parse(bytes) {
@@ -300,33 +300,21 @@ mod tests {
                 velocity: 100
             })
         );
-        assert_eq!(
-            parse(&[0x90, 60, 0]),
-            Some(MidiMsg::NoteOff { note: 60 })
-        );
-        assert_eq!(
-            parse(&[0x80, 48, 64]),
-            Some(MidiMsg::NoteOff { note: 48 })
-        );
+        assert_eq!(parse(&[0x90, 60, 0]), Some(MidiMsg::NoteOff { note: 60 }));
+        assert_eq!(parse(&[0x80, 48, 64]), Some(MidiMsg::NoteOff { note: 48 }));
     }
 
     #[test]
     fn parses_cc_aftertouch_and_bend() {
         assert_eq!(
             parse(&[0xB0, 64, 127]),
-            Some(MidiMsg::Control {
-                cc: 64,
-                value: 127
-            })
+            Some(MidiMsg::Control { cc: 64, value: 127 })
         );
         assert_eq!(
             parse(&[0xD0, 42]),
             Some(MidiMsg::Aftertouch { pressure: 42 })
         );
-        assert_eq!(
-            parse(&[0xE0, 0, 64]),
-            Some(MidiMsg::PitchBend { value: 0 })
-        );
+        assert_eq!(parse(&[0xE0, 0, 64]), Some(MidiMsg::PitchBend { value: 0 }));
         assert_eq!(
             parse(&[0xE0, 127, 127]),
             Some(MidiMsg::PitchBend { value: 8191 })
@@ -393,4 +381,3 @@ mod tests {
         assert_eq!(engine.candidate_index(), 0);
     }
 }
-

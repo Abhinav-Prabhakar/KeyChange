@@ -4,16 +4,17 @@ use std::time::{Duration, Instant};
 
 use gpui::prelude::*;
 use gpui::{
-    div, point, px, rgb, rgba, AnyElement, BoxShadow, ClipboardItem, Context,
-    DefiniteLength, Div, FocusHandle, Focusable, FontWeight, KeyDownEvent, KeyUpEvent, Keystroke,
-    MouseButton, Render, SharedString, Window,
+    div, point, px, rgb, rgba, AnyElement, BoxShadow, ClipboardItem, Context, DefiniteLength, Div,
+    FocusHandle, Focusable, FontWeight, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, Render,
+    SharedString, Window,
 };
 
 use crate::engine::{
-    chord_pads, freq_for, note_name, Engine, KeyKind, Layer, Pedal, BLACK_MIDI,
+    chord_pads, freq_for, note_name, Control, Engine, KeyKind, Layer, Pedal, BLACK_MIDI,
     BLACK_SLOTS, DEFAULT_LETTERS, WHITE_MIDI,
 };
 use crate::midi::{self, MidiHub, MidiMsg, MidiStatus, Packet, Source};
+use crate::settings::Settings;
 
 // ─────────────────────────────────── palette ───────────────────────────────
 
@@ -130,6 +131,7 @@ enum Hover {
 enum OverlayTab {
     Map,
     Gestures,
+    Learn,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,6 +167,7 @@ pub struct KeyChangeApp {
     seq: u64,
     demo_notes: u32,
     caret_on: bool,
+    learn: Option<Control>,
 }
 
 impl KeyChangeApp {
@@ -183,9 +186,11 @@ impl KeyChangeApp {
         })
         .detach();
         let now = Instant::now();
+        let mut engine = Engine::new();
+        Settings::load().apply_to(&mut engine);
         let mut app = Self {
             focus: cx.focus_handle(),
-            engine: Engine::new(),
+            engine,
             hub,
             started: now,
             hover: None,
@@ -202,6 +207,7 @@ impl KeyChangeApp {
             seq: 0,
             demo_notes: 0,
             caret_on: true,
+            learn: None,
         };
         if std::env::var("KC_DEMO").is_ok() {
             app.toggle_demo();
@@ -226,6 +232,14 @@ impl KeyChangeApp {
         self.started.elapsed().as_millis() as u64
     }
 
+    /// Write layouts, velocity, gate, layer and learned CCs. Failure is a
+    /// notice, never an interruption.
+    fn persist(&mut self) {
+        if let Err(err) = Settings::from_engine(&self.engine).save() {
+            self.set_notice(format!("Settings not saved · {err}"), NoticeKind::Info);
+        }
+    }
+
     fn set_notice(&mut self, text: impl Into<String>, kind: NoticeKind) {
         self.notice = Some(Notice {
             text: text.into(),
@@ -248,6 +262,7 @@ impl KeyChangeApp {
         }
     }
 
+    #[allow(clippy::collapsible_match)]
     fn handle_packet(&mut self, packet: Packet, cx: &mut Context<Self>) {
         if packet.source == Source::DemoEnd {
             self.hub.demo_running = false;
@@ -275,7 +290,14 @@ impl KeyChangeApp {
             }
             Some(MidiMsg::NoteOff { note }) => self.engine.note_off(note),
             Some(MidiMsg::Control { cc, value }) => {
-                if let Some(outcome) = self.engine.control(cc, value, now) {
+                if let Some(control) = self.learn.take() {
+                    self.engine.cc_map.assign(control, cc);
+                    self.persist();
+                    self.set_notice(
+                        format!("{} learned · CC {cc}", control.label()),
+                        NoticeKind::Good,
+                    );
+                } else if let Some(outcome) = self.engine.control(cc, value, now) {
                     if let Some(k) = outcome.key {
                         self.flash(k, None);
                     }
@@ -409,6 +431,14 @@ impl KeyChangeApp {
                 "q" => {
                     cx.quit();
                 }
+                "," => {
+                    self.overlay = if self.overlay == Some(OverlayTab::Learn) {
+                        None
+                    } else {
+                        Some(OverlayTab::Learn)
+                    };
+                    self.learn = None;
+                }
                 _ => return,
             }
             cx.notify();
@@ -417,6 +447,7 @@ impl KeyChangeApp {
         if key == "escape" {
             if self.overlay.is_some() {
                 self.overlay = None;
+                self.learn = None;
                 self.edit_mode = false;
                 self.engine.cancel_edit();
             } else if self.engine.edit_mode {
@@ -427,6 +458,7 @@ impl KeyChangeApp {
             return;
         }
         if key == "tab" {
+            self.learn = None;
             self.overlay = match self.overlay {
                 Some(OverlayTab::Map) => None,
                 _ => Some(OverlayTab::Map),
@@ -436,6 +468,7 @@ impl KeyChangeApp {
         }
         if key == "/" {
             self.overlay = Some(OverlayTab::Gestures);
+            self.learn = None;
             cx.notify();
             return;
         }
@@ -448,8 +481,14 @@ impl KeyChangeApp {
             }
             "space" => self.engine.type_space(now),
             "enter" => self.engine.commit_word(now),
-            "left" | "[" => self.engine.cycle_layer(-1),
-            "right" | "]" => self.engine.cycle_layer(1),
+            "left" | "[" => {
+                self.engine.cycle_layer(-1);
+                self.persist();
+            }
+            "right" | "]" => {
+                self.engine.cycle_layer(1);
+                self.persist();
+            }
             "up" => self.engine.scrub_candidates(-1),
             "down" => self.engine.scrub_candidates(1),
             _ => {
@@ -660,18 +699,13 @@ impl KeyChangeApp {
                             .child(profile),
                     )
                     .child(
-                        div()
-                            .w(px(26.))
-                            .h(px(3.))
-                            .rounded_full()
-                            .bg(hair())
-                            .child(
-                                div()
-                                    .w(px(26.0 * (quality / 100.0)))
-                                    .h_full()
-                                    .rounded_full()
-                                    .bg(green()),
-                            ),
+                        div().w(px(26.)).h(px(3.)).rounded_full().bg(hair()).child(
+                            div()
+                                .w(px(26.0 * (quality / 100.0)))
+                                .h_full()
+                                .rounded_full()
+                                .bg(green()),
+                        ),
                     ),
             )
             // MIDI
@@ -1025,7 +1059,12 @@ impl KeyChangeApp {
                     .child("PLAY  TWO NOTES  ·  INTERVAL      THREE  ·  WORD"),
             );
         }
-        let mut row = div().flex().flex_row().items_center().gap(px(6.)).h(px(28.));
+        let mut row = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.))
+            .h(px(28.));
         for (i, word) in candidates.into_iter().enumerate() {
             let on = i == active;
             row = row.child(
@@ -1202,25 +1241,16 @@ impl KeyChangeApp {
         };
         let tile_bg = if is_word { yellow() } else { card_warm() };
         let mut spark = div().flex().flex_row().items_end().gap(px(1.5)).h(px(26.));
-        let hist: Vec<u32> = self
-            .engine
-            .wpm_history
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
+        let hist: Vec<u32> = self.engine.wpm_history.iter().copied().collect::<Vec<_>>();
         for (i, v) in hist.iter().rev().take(24).rev().enumerate() {
             let h = 3.0 + (*v as f32 / 240.0).clamp(0.0, 1.0) * 23.0;
-            spark = spark.child(
-                div()
-                    .w(px(2.5))
-                    .h(px(h))
-                    .rounded(px(1.))
-                    .bg(if i + 6 >= hist.len().min(24) {
-                        op(ink(), 0.75)
-                    } else {
-                        op(hair_dark(), 1.0)
-                    }),
-            );
+            spark = spark.child(div().w(px(2.5)).h(px(h)).rounded(px(1.)).bg(
+                if i + 6 >= hist.len().min(24) {
+                    op(ink(), 0.75)
+                } else {
+                    op(hair_dark(), 1.0)
+                },
+            ));
         }
         if hist.is_empty() {
             for _ in 0..12 {
@@ -1272,24 +1302,19 @@ impl KeyChangeApp {
                     .flex_col()
                     .gap(px(5.))
                     .child(
-                        div()
-                            .h(px(4.))
-                            .w_full()
-                            .rounded_full()
-                            .bg(hair())
-                            .child(
-                                div()
-                                    .h_full()
-                                    .rounded_full()
-                                    .bg(if heat > 0.7 {
-                                        yellow()
-                                    } else if heat > 0.3 {
-                                        blue()
-                                    } else {
-                                        hair_dark()
-                                    })
-                                    .w(DefiniteLength::Fraction(heat.max(0.06))),
-                            ),
+                        div().h(px(4.)).w_full().rounded_full().bg(hair()).child(
+                            div()
+                                .h_full()
+                                .rounded_full()
+                                .bg(if heat > 0.7 {
+                                    yellow()
+                                } else if heat > 0.3 {
+                                    blue()
+                                } else {
+                                    hair_dark()
+                                })
+                                .w(DefiniteLength::Fraction(heat.max(0.06))),
+                        ),
                     )
                     .child(
                         div()
@@ -1301,11 +1326,7 @@ impl KeyChangeApp {
                                     .w(px(14.))
                                     .h(px(3.))
                                     .rounded(px(1.))
-                                    .bg(if (i as f32) < effort {
-                                        ink()
-                                    } else {
-                                        hair()
-                                    })
+                                    .bg(if (i as f32) < effort { ink() } else { hair() })
                             })),
                     ),
             )
@@ -1448,9 +1469,7 @@ impl KeyChangeApp {
                 .pb(px(11.))
                 .gap(px(5.))
                 .bg(bg)
-                .when(i < 14, |el| {
-                    el.border_r_1().border_color(rgb(0xd9cfb9))
-                })
+                .when(i < 14, |el| el.border_r_1().border_color(rgb(0xd9cfb9)))
                 .cursor_pointer()
                 .hover(|s| s.bg(card_warm()))
                 .on_hover(cx.listener(move |this, hovered, _, cx| {
@@ -1618,7 +1637,6 @@ impl KeyChangeApp {
             )
     }
 
-
     // ── pedals & controls ───────────────────────────────────────────────────
 
     fn deck(&self, cx: &mut Context<Self>) -> Div {
@@ -1683,13 +1701,11 @@ impl KeyChangeApp {
                         .items_center()
                         .justify_center()
                         .gap(px(5.))
-                        .child(
-                            div().size(px(4.5)).rounded_full().bg(if lit {
-                                green()
-                            } else {
-                                faint()
-                            }),
-                        )
+                        .child(div().size(px(4.5)).rounded_full().bg(if lit {
+                            green()
+                        } else {
+                            faint()
+                        }))
                         .child(
                             div()
                                 .font_family(MONO)
@@ -1729,6 +1745,7 @@ impl KeyChangeApp {
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {
                             this.engine.set_base_velocity(v);
+                            this.persist();
                             this.set_notice(format!("Velocity {v}"), NoticeKind::Info);
                             cx.notify();
                         }),
@@ -1755,6 +1772,7 @@ impl KeyChangeApp {
                     cx.listener(move |this, _, _, cx| {
                         let next = (this.engine.timing_ms as i32 + delta * 40).clamp(40, 240);
                         this.engine.set_timing(next as u64);
+                        this.persist();
                         this.set_notice(format!("Gate {} ms", next), NoticeKind::Info);
                         cx.notify();
                     }),
@@ -1786,15 +1804,15 @@ impl KeyChangeApp {
             .gap(px(9.))
             .px(px(10.))
             // pedals
+            .child(pedal(self, 0, "SUS", "⌣", self.engine.sustain, cx))
             .child(pedal(
                 self,
-                0,
-                "SUS",
-                "⌣",
-                self.engine.sustain,
+                1,
+                "SOFT",
+                "◐",
+                self.pulse.pedal == Some(1) && self.pulse_alive(self.pulse.seq, 260),
                 cx,
             ))
-            .child(pedal(self, 1, "SOFT", "◐", self.pulse.pedal == Some(1) && self.pulse_alive(self.pulse.seq, 260), cx))
             .child(pedal(self, 2, "DEL", "⌫", false, cx))
             .child(div().w(px(1.)).h(px(34.)).bg(hair()))
             // gate
@@ -1832,11 +1850,7 @@ impl KeyChangeApp {
                             .items_center()
                             .justify_between()
                             .child(caps("GATE", 7.5))
-                            .child(
-                                mono(7.5)
-                                    .text_color(faint())
-                                    .child(format!("{} MS", gate)),
-                            ),
+                            .child(mono(7.5).text_color(faint()).child(format!("{} MS", gate))),
                     )
                     .child(
                         div()
@@ -1872,8 +1886,7 @@ impl KeyChangeApp {
                                     .child(
                                         div()
                                             .absolute()
-                                            .left(DefiniteLength::Fraction(0.12
-                                                + gate_frac * 0.74))
+                                            .left(DefiniteLength::Fraction(0.12 + gate_frac * 0.74))
                                             .h(px(8.))
                                             .w(px(2.))
                                             .bg(yellow())
@@ -1920,7 +1933,10 @@ impl KeyChangeApp {
                         if *hovered {
                             this.set_hover(
                                 Some(Hover::Wheel),
-                                Some("Mod wheel — scroll completions; aftertouch accepts".to_string()),
+                                Some(
+                                    "Mod wheel — scroll completions; aftertouch accepts"
+                                        .to_string(),
+                                ),
                             );
                         } else if this.hover_is(Hover::Wheel) {
                             this.set_hover(None, None);
@@ -1959,9 +1975,7 @@ impl KeyChangeApp {
                                     .absolute()
                                     .left(px(3.))
                                     .right(px(3.))
-                                    .top(DefiniteLength::Fraction(
-                                        0.08 + wheel_frac * 0.74,
-                                    ))
+                                    .top(DefiniteLength::Fraction(0.08 + wheel_frac * 0.74))
                                     .h(px(3.))
                                     .rounded(px(1.))
                                     .bg(blue()),
@@ -1990,7 +2004,7 @@ impl KeyChangeApp {
                     .items_end()
                     .gap(px(2.))
                     .child(caps("⌘D DEMO", 7.))
-                    .child(caps("⌘C COPY  ·  ⌘Z UNDO  ·  TAB MAP", 7.).text_color(faint())),
+                    .child(caps("⌘C COPY · ⌘Z UNDO · TAB MAP · ⌘, MIDI", 7.).text_color(faint())),
             )
     }
 
@@ -2064,18 +2078,13 @@ impl KeyChangeApp {
                             .child(self.engine.active_profile().name.to_uppercase()),
                     )
                     .child(
-                        div()
-                            .w(px(50.))
-                            .h(px(3.))
-                            .rounded_full()
-                            .bg(hair())
-                            .child(
-                                div()
-                                    .w(px(50.0 * (self.engine.quality() / 100.0)))
-                                    .h_full()
-                                    .rounded_full()
-                                    .bg(green()),
-                            ),
+                        div().w(px(50.)).h(px(3.)).rounded_full().bg(hair()).child(
+                            div()
+                                .w(px(50.0 * (self.engine.quality() / 100.0)))
+                                .h_full()
+                                .rounded_full()
+                                .bg(green()),
+                        ),
                     )
                     .child(
                         mono(8.)
@@ -2090,16 +2099,42 @@ impl KeyChangeApp {
     fn overlay(&self, tab: OverlayTab, cx: &mut Context<Self>) -> AnyElement {
         let close = cx.listener(|this, _, _, cx| {
             this.overlay = None;
+            this.learn = None;
             this.edit_mode = false;
             this.engine.cancel_edit();
             cx.notify();
         });
         let dismiss = cx.listener(|this, _, _, cx| {
             this.overlay = None;
+            this.learn = None;
             this.edit_mode = false;
             this.engine.cancel_edit();
             cx.notify();
         });
+
+        let tab_button = |label: &'static str, target: OverlayTab, cx: &mut Context<Self>| {
+            let on = tab == target;
+            div()
+                .px(px(12.))
+                .py(px(4.))
+                .rounded(px(6.))
+                .bg(if on { card() } else { side() })
+                .text_size(px(10.))
+                .font_family(MONO)
+                .font_weight(FontWeight::BOLD)
+                .text_color(if on { ink() } else { muted() })
+                .cursor_pointer()
+                .hover(|s| s.text_color(ink()))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.overlay = Some(target);
+                        this.learn = None;
+                        cx.notify();
+                    }),
+                )
+                .child(label)
+        };
 
         let tabs = div()
             .flex()
@@ -2109,48 +2144,9 @@ impl KeyChangeApp {
             .p(px(2.))
             .rounded(px(8.))
             .bg(side())
-            .child(
-                div()
-                    .px(px(12.))
-                    .py(px(4.))
-                    .rounded(px(6.))
-                    .bg(if tab == OverlayTab::Map { card() } else { side() })
-                    .text_size(px(10.))
-                    .font_family(MONO)
-                    .font_weight(FontWeight::BOLD)
-                    .cursor_pointer()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _, _, cx| {
-                            this.overlay = Some(OverlayTab::Map);
-                            cx.notify();
-                        }),
-                    )
-                    .child("MAP"),
-            )
-            .child(
-                div()
-                    .px(px(12.))
-                    .py(px(4.))
-                    .rounded(px(6.))
-                    .bg(if tab == OverlayTab::Gestures {
-                        card()
-                    } else {
-                        side()
-                    })
-                    .text_size(px(10.))
-                    .font_family(MONO)
-                    .font_weight(FontWeight::BOLD)
-                    .cursor_pointer()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _, _, cx| {
-                            this.overlay = Some(OverlayTab::Gestures);
-                            cx.notify();
-                        }),
-                    )
-                    .child("GESTURES"),
-            );
+            .child(tab_button("MAP", OverlayTab::Map, cx))
+            .child(tab_button("GESTURES", OverlayTab::Gestures, cx))
+            .child(tab_button("MIDI", OverlayTab::Learn, cx));
 
         let header = div()
             .flex()
@@ -2198,6 +2194,7 @@ impl KeyChangeApp {
         let body = match tab {
             OverlayTab::Map => self.map_body(cx),
             OverlayTab::Gestures => self.gestures_body(),
+            OverlayTab::Learn => self.learn_body(cx),
         };
 
         let card = div()
@@ -2266,12 +2263,11 @@ impl KeyChangeApp {
                             cx.notify();
                         }),
                     )
-                    .child(
-                        div()
-                            .size(px(5.))
-                            .rounded_full()
-                            .bg(if p.custom { blue() } else { green() }),
-                    )
+                    .child(div().size(px(5.)).rounded_full().bg(if p.custom {
+                        blue()
+                    } else {
+                        green()
+                    }))
                     .child(
                         div()
                             .font_family(UI)
@@ -2316,7 +2312,11 @@ impl KeyChangeApp {
                     } else {
                         op(hair(), 0.0)
                     })
-                    .bg(if picked { op(blue(), 0.10) } else { op(card(), 1.0) })
+                    .bg(if picked {
+                        op(blue(), 0.10)
+                    } else {
+                        op(card(), 1.0)
+                    })
                     .cursor_pointer()
                     .hover(|s| s.bg(card_warm()))
                     .on_hover(cx.listener(move |this, hovered, _, cx| {
@@ -2338,8 +2338,8 @@ impl KeyChangeApp {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {
-                            if this.engine.edit_mode {
-                                this.engine.pick_swap(i);
+                            if this.engine.edit_mode && this.engine.pick_swap(i) {
+                                this.persist();
                             }
                             cx.notify();
                         }),
@@ -2380,11 +2380,7 @@ impl KeyChangeApp {
                                     .w(px(3.))
                                     .h(px(3.))
                                     .rounded_full()
-                                    .bg(if (d as f32) < effort {
-                                        muted()
-                                    } else {
-                                        hair()
-                                    })
+                                    .bg(if (d as f32) < effort { muted() } else { hair() })
                             })),
                     ),
             );
@@ -2416,11 +2412,11 @@ impl KeyChangeApp {
                             .flex_row()
                             .items_center()
                             .gap(px(7.))
-                            .child(
-                                mono(8.5)
-                                    .text_color(faint())
-                                    .child(if editing { "PICK TWO KEYS" } else { "SCORE" }),
-                            )
+                            .child(mono(8.5).text_color(faint()).child(if editing {
+                                "PICK TWO KEYS"
+                            } else {
+                                "SCORE"
+                            }))
                             .when(editing, |el| {
                                 el.child(
                                     div()
@@ -2446,18 +2442,13 @@ impl KeyChangeApp {
                     .items_center()
                     .gap(px(10.))
                     .child(
-                        div()
-                            .flex_1()
-                            .h(px(5.))
-                            .rounded_full()
-                            .bg(side())
-                            .child(
-                                div()
-                                    .h_full()
-                                    .rounded_full()
-                                    .bg(if quality > 92.0 { green() } else { yellow() })
-                                    .w(DefiniteLength::Fraction(quality / 100.0)),
-                            ),
+                        div().flex_1().h(px(5.)).rounded_full().bg(side()).child(
+                            div()
+                                .h_full()
+                                .rounded_full()
+                                .bg(if quality > 92.0 { green() } else { yellow() })
+                                .w(DefiniteLength::Fraction(quality / 100.0)),
+                        ),
                     )
                     .child(
                         mono(9.)
@@ -2482,6 +2473,7 @@ impl KeyChangeApp {
                                 MouseButton::Left,
                                 cx.listener(|this, _, _, cx| {
                                     this.engine.duplicate_as_custom();
+                                    this.persist();
                                     this.edit_mode = true;
                                     cx.notify();
                                 }),
@@ -2541,6 +2533,174 @@ impl KeyChangeApp {
             )
     }
 
+    fn learn_body(&self, cx: &mut Context<Self>) -> Div {
+        let mut rows = div().flex().flex_col().gap(px(6.));
+        for control in Control::ALL {
+            let cc = control.get(&self.engine.cc_map);
+            let listening = self.learn == Some(control);
+            rows = rows.child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .px(px(10.))
+                    .py(px(7.))
+                    .rounded(px(8.))
+                    .bg(if listening { card_warm() } else { side() })
+                    .border_1()
+                    .border_color(if listening { ink() } else { hair() })
+                    .child(
+                        div().w(px(84.)).child(
+                            mono(8.5)
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(ink())
+                                .child(control.label()),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(muted())
+                            .child(control.hint()),
+                    )
+                    .child(
+                        div()
+                            .w(px(54.))
+                            .py(px(2.))
+                            .rounded(px(4.))
+                            .bg(if listening { yellow() } else { card() })
+                            .border_1()
+                            .border_color(hair())
+                            .flex()
+                            .justify_center()
+                            .child(
+                                mono(8.5)
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(ink())
+                                    .child(format!("CC {cc}")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id(("learn", control as usize))
+                            .w(px(82.))
+                            .h(px(26.))
+                            .rounded(px(5.))
+                            .bg(if listening { ink() } else { card() })
+                            .border_1()
+                            .border_color(if listening { ink() } else { hair() })
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(if listening { ink() } else { card_warm() }))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    if this.learn == Some(control) {
+                                        this.learn = None;
+                                        this.set_notice("Learning cancelled", NoticeKind::Info);
+                                    } else {
+                                        this.learn = Some(control);
+                                        this.set_notice(
+                                            format!("Move a pedal or knob for {}", control.label()),
+                                            NoticeKind::Info,
+                                        );
+                                    }
+                                    cx.notify();
+                                }),
+                            )
+                            .child(
+                                mono(8.5)
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(if listening { yellow() } else { ink() })
+                                    .child(if listening { "LISTENING…" } else { "LEARN" }),
+                            ),
+                    ),
+            );
+        }
+
+        let reset = div()
+            .h(px(28.))
+            .px(px(12.))
+            .rounded(px(6.))
+            .border_1()
+            .border_color(hair())
+            .bg(card())
+            .flex()
+            .items_center()
+            .cursor_pointer()
+            .hover(|s| s.bg(card_warm()))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.engine.cc_map = Default::default();
+                    this.learn = None;
+                    this.persist();
+                    this.set_notice("MIDI controls reset", NoticeKind::Info);
+                    cx.notify();
+                }),
+            )
+            .child(
+                mono(8.5)
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(ink())
+                    .child("RESET TO DEFAULTS"),
+            );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_end()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(3.))
+                            .child(caps("MIDI LEARN", 8.))
+                            .child(
+                                div()
+                                    .font_family(SERIF)
+                                    .italic()
+                                    .text_size(px(17.))
+                                    .text_color(ink())
+                                    .child("teach it your pedals"),
+                            ),
+                    )
+                    .child(
+                        mono(8.)
+                            .text_color(faint())
+                            .child("LEARNING A USED NUMBER SWAPS THE TWO CONTROLS"),
+                    ),
+            )
+            .child(rows)
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(12.))
+                    .pt(px(4.))
+                    .border_t_1()
+                    .border_color(hair())
+                    .child(
+                        mono(8.)
+                            .text_color(faint())
+                            .child("AFTERTOUCH ACCEPTS A COMPLETION · PITCH BEND SCRUBS"),
+                    )
+                    .child(div().flex_1())
+                    .child(reset),
+            )
+    }
+
     fn gestures_body(&self) -> Div {
         let mut chords = div().flex().flex_col().gap(px(7.));
         for (i, pad) in chord_pads().iter().enumerate() {
@@ -2560,28 +2720,19 @@ impl KeyChangeApp {
                             .child(pad.word),
                     )
                     .child(div().flex_1())
-                    .child(
-                        mono(8.)
-                            .text_color(faint())
-                            .child(format!(
-                                "{} {} {}",
-                                note_name(pad.notes[0]),
-                                note_name(pad.notes[1]),
-                                note_name(pad.notes[2])
-                            )),
-                    ),
+                    .child(mono(8.).text_color(faint()).child(format!(
+                        "{} {} {}",
+                        note_name(pad.notes[0]),
+                        note_name(pad.notes[1]),
+                        note_name(pad.notes[2])
+                    ))),
             );
         }
 
         let mut intervals = div().flex().flex_col().gap(px(9.));
         for (semi, text) in crate::engine::INTERVALS {
-            let dots = (0..semi.min(9)).map(|_| {
-                div()
-                    .w(px(2.))
-                    .h(px(2.))
-                    .rounded_full()
-                    .bg(op(ink(), 0.45))
-            });
+            let dots = (0..semi.min(9))
+                .map(|_| div().w(px(2.)).h(px(2.)).rounded_full().bg(op(ink(), 0.45)));
             intervals = intervals.child(
                 div()
                     .flex()
@@ -2695,7 +2846,9 @@ fn triad_diagram(index: usize, active: bool) -> Div {
                 .h(px(heights[i]))
                 .rounded(px(1.5))
                 .bg(color)
-                .when(i == 0, |el| el.child(div().size(px(2.)).rounded_full().bg(card())))
+                .when(i == 0, |el| {
+                    el.child(div().size(px(2.)).rounded_full().bg(card()))
+                })
         }))
         .child(
             div()

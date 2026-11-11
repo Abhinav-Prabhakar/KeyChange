@@ -5,6 +5,7 @@
 
 mod engine;
 mod midi;
+mod settings;
 mod ui;
 
 use std::borrow::Cow;

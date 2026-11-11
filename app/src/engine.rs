@@ -7,12 +7,12 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::OnceLock;
 
+use serde::{Deserialize, Serialize};
+
 // ────────────────────────────── physical layout ──────────────────────────────
 
 /// The 15 white keys drawn on screen, C3 → C5.
-pub const WHITE_MIDI: [u8; 15] = [
-    48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72,
-];
+pub const WHITE_MIDI: [u8; 15] = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72];
 /// White-key index each black key is engraved after.
 pub const BLACK_SLOTS: [usize; 10] = [0, 1, 3, 4, 5, 7, 8, 10, 11, 12];
 /// The 10 black keys, C#3 → A#4.
@@ -24,8 +24,9 @@ pub enum KeyKind {
     Black(usize),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Layer {
+    #[default]
     Abc,
     Upper,
     Symbols,
@@ -108,10 +109,7 @@ pub fn chord_pads() -> &'static [ChordPad] {
                     .find(|n| (*n as i32 % 12) == *pc)
                     .unwrap_or(WHITE_MIDI[base]);
                 notes[i] = note;
-                keys[i] = WHITE_MIDI
-                    .iter()
-                    .position(|n| *n == note)
-                    .unwrap_or(base);
+                keys[i] = WHITE_MIDI.iter().position(|n| *n == note).unwrap_or(base);
             }
             out.push(ChordPad {
                 word,
@@ -170,7 +168,7 @@ pub const DEFAULT_LETTERS: [&str; 15] = [
     "e", "t", "a", "o", "i", "n", "s", "h", "r", "d", "l", "c", "u", "m", "w",
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LayoutProfile {
     pub name: String,
     pub letters: Vec<String>,
@@ -261,7 +259,11 @@ pub fn profile_score(letters: &[String]) -> f32 {
 pub fn profile_quality(letters: &[String]) -> f32 {
     let mut freqs: Vec<f32> = letters.iter().map(|g| freq_for(g)).collect();
     freqs.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
-    let ideal: f32 = freqs.iter().enumerate().map(|(i, f)| f * effort_for_key(i)).sum();
+    let ideal: f32 = freqs
+        .iter()
+        .enumerate()
+        .map(|(i, f)| f * effort_for_key(i))
+        .sum();
     let actual = profile_score(letters);
     if actual <= 0.0 {
         0.0
@@ -317,6 +319,121 @@ pub struct RecentNote {
     pub index: u64,
 }
 
+/// Every knob and pedal the instrument listens for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Control {
+    Wheel,
+    Gate,
+    Sustain,
+    Soft,
+    Sostenuto,
+    Panic,
+}
+
+impl Control {
+    pub const ALL: [Control; 6] = [
+        Control::Sustain,
+        Control::Soft,
+        Control::Sostenuto,
+        Control::Gate,
+        Control::Wheel,
+        Control::Panic,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Control::Wheel => "MOD WHEEL",
+            Control::Gate => "EXPRESSION",
+            Control::Sustain => "SUSTAIN",
+            Control::Soft => "SOFT",
+            Control::Sostenuto => "SOSTENUTO",
+            Control::Panic => "PANIC",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Control::Wheel => "scrub autocomplete candidates",
+            Control::Gate => "set the chord gate",
+            Control::Sustain => "hold word gaps",
+            Control::Soft => "cycle the layer",
+            Control::Sostenuto => "delete the last word",
+            Control::Panic => "release every note",
+        }
+    }
+
+    pub fn get(self, map: &CcMap) -> u8 {
+        match self {
+            Control::Wheel => map.wheel,
+            Control::Gate => map.gate,
+            Control::Sustain => map.sustain,
+            Control::Soft => map.soft,
+            Control::Sostenuto => map.sostenuto,
+            Control::Panic => map.panic,
+        }
+    }
+
+    pub fn set(self, map: &mut CcMap, cc: u8) {
+        let cc = cc & 0x7F;
+        match self {
+            Control::Wheel => map.wheel = cc,
+            Control::Gate => map.gate = cc,
+            Control::Sustain => map.sustain = cc,
+            Control::Soft => map.soft = cc,
+            Control::Sostenuto => map.sostenuto = cc,
+            Control::Panic => map.panic = cc,
+        }
+    }
+}
+
+/// MIDI CC assignments. Defaults follow the MIDI spec, but any pedal or knob
+/// can be learned, and learning a used number swaps the two controls.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CcMap {
+    pub wheel: u8,
+    pub gate: u8,
+    pub sustain: u8,
+    pub soft: u8,
+    pub sostenuto: u8,
+    pub panic: u8,
+}
+
+impl Default for CcMap {
+    fn default() -> Self {
+        Self {
+            wheel: 1,
+            gate: 11,
+            sustain: 64,
+            soft: 67,
+            sostenuto: 66,
+            panic: 123,
+        }
+    }
+}
+
+impl CcMap {
+    pub fn target(&self, cc: u8) -> Option<Control> {
+        Control::ALL
+            .into_iter()
+            .find(|control| control.get(self) == (cc & 0x7F))
+    }
+
+    /// Point `control` at `cc`, moving any previous owner to the old number so
+    /// the map never grows two owners for one knob.
+    pub fn assign(&mut self, control: Control, cc: u8) {
+        let cc = cc & 0x7F;
+        let old = control.get(self);
+        if old == cc {
+            return;
+        }
+        if let Some(other) = self.target(cc) {
+            other.set(self, old);
+        }
+        control.set(self, cc);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pedal {
     Sustain,
@@ -350,22 +467,136 @@ const TYPO_MAP: [(&str, &str); 8] = [
 ];
 
 const DICTIONARY: &[&str] = &[
-    "the", "and", "you", "that", "have", "with", "this", "from", "they", "will",
-    "would", "there", "their", "what", "about", "which", "when", "make", "like",
-    "time", "just", "know", "take", "people", "into", "year", "your", "good",
-    "some", "could", "them", "than", "then", "look", "only", "come", "over",
-    "think", "also", "back", "after", "use", "two", "how", "our", "work",
-    "first", "well", "way", "even", "new", "want", "because", "any", "these",
-    "give", "day", "most", "us", "hello", "help", "held", "helm", "hear",
-    "heart", "heavy", "here", "house", "sound", "song", "play", "playing",
-    "words", "word", "loud", "louder", "music", "piano", "keys", "keyboard",
-    "type", "typing", "instrument", "note", "notes", "chord", "chords",
-    "space", "spaces", "sustain", "soft", "layer", "layers", "velocity",
-    "quantize", "staff", "preset", "presets", "encore", "tempo", "timing",
-    "press", "pressing", "hold", "holding", "pull", "push", "pedal", "pedals",
-    "left", "right", "hand", "hands", "listen", "listening", "little",
-    "letter", "letters", "light", "lights", "language", "loudest", "flow",
-    "flowing", "glide", "gliding", "spell", "spelling", "speak", "speaking",
+    "the",
+    "and",
+    "you",
+    "that",
+    "have",
+    "with",
+    "this",
+    "from",
+    "they",
+    "will",
+    "would",
+    "there",
+    "their",
+    "what",
+    "about",
+    "which",
+    "when",
+    "make",
+    "like",
+    "time",
+    "just",
+    "know",
+    "take",
+    "people",
+    "into",
+    "year",
+    "your",
+    "good",
+    "some",
+    "could",
+    "them",
+    "than",
+    "then",
+    "look",
+    "only",
+    "come",
+    "over",
+    "think",
+    "also",
+    "back",
+    "after",
+    "use",
+    "two",
+    "how",
+    "our",
+    "work",
+    "first",
+    "well",
+    "way",
+    "even",
+    "new",
+    "want",
+    "because",
+    "any",
+    "these",
+    "give",
+    "day",
+    "most",
+    "us",
+    "hello",
+    "help",
+    "held",
+    "helm",
+    "hear",
+    "heart",
+    "heavy",
+    "here",
+    "house",
+    "sound",
+    "song",
+    "play",
+    "playing",
+    "words",
+    "word",
+    "loud",
+    "louder",
+    "music",
+    "piano",
+    "keys",
+    "keyboard",
+    "type",
+    "typing",
+    "instrument",
+    "note",
+    "notes",
+    "chord",
+    "chords",
+    "space",
+    "spaces",
+    "sustain",
+    "soft",
+    "layer",
+    "layers",
+    "velocity",
+    "quantize",
+    "staff",
+    "preset",
+    "presets",
+    "encore",
+    "tempo",
+    "timing",
+    "press",
+    "pressing",
+    "hold",
+    "holding",
+    "pull",
+    "push",
+    "pedal",
+    "pedals",
+    "left",
+    "right",
+    "hand",
+    "hands",
+    "listen",
+    "listening",
+    "little",
+    "letter",
+    "letters",
+    "light",
+    "lights",
+    "language",
+    "loudest",
+    "flow",
+    "flowing",
+    "glide",
+    "gliding",
+    "spell",
+    "spelling",
+    "speak",
+    "speaking",
 ];
 
 // ───────────────────────────────── engine ───────────────────────────────────
@@ -378,6 +609,7 @@ pub struct Engine {
     pub soft: bool,
     pub sostenuto: bool,
     pub timing_ms: u64,
+    pub cc_map: CcMap,
     pub profiles: Vec<LayoutProfile>,
     pub profile_index: usize,
     pub edit_mode: bool,
@@ -415,6 +647,7 @@ impl Engine {
             soft: false,
             sostenuto: false,
             timing_ms: 120,
+            cc_map: CcMap::default(),
             profiles: builtin_profiles(),
             profile_index: 0,
             edit_mode: false,
@@ -484,7 +717,6 @@ impl Engine {
         profile_quality(&self.active_profile().letters)
     }
 
-
     // ── notes ────────────────────────────────────────────────────────────────
 
     pub fn note_on(&mut self, note: u8, velocity: u8, now: u64) -> NoteOutcome {
@@ -536,16 +768,8 @@ impl Engine {
         }
 
         let (glyph, kind, step) = match key {
-            Some(KeyKind::White(i)) => (
-                self.typed_white(i, velocity),
-                CharKind::Letter,
-                Some(i),
-            ),
-            Some(KeyKind::Black(b)) => (
-                self.preview_black(b),
-                CharKind::Symbol,
-                None,
-            ),
+            Some(KeyKind::White(i)) => (self.typed_white(i, velocity), CharKind::Letter, Some(i)),
+            Some(KeyKind::Black(b)) => (self.preview_black(b), CharKind::Symbol, None),
             None => (String::new(), CharKind::Letter, None),
         };
         if !glyph.is_empty() {
@@ -578,14 +802,15 @@ impl Engine {
                 .unwrap_or_default();
             (glyphs, Gesture::Single, false)
         });
-        if !text.is_empty() || self.session.as_ref().map(|s| !s.notes.is_empty()).unwrap_or(false) {
+        if !text.is_empty()
+            || self
+                .session
+                .as_ref()
+                .map(|s| !s.notes.is_empty())
+                .unwrap_or(false)
+        {
             let start = self.session.as_ref().map(|s| s.start).unwrap_or(0);
-            let current: String = self
-                .cells
-                .iter()
-                .skip(start)
-                .map(|c| c.ch)
-                .collect();
+            let current: String = self.cells.iter().skip(start).map(|c| c.ch).collect();
             if current != text {
                 self.cells.truncate(start);
                 let kind = if matches!(gesture, Gesture::Word(_) | Gesture::Repeat) {
@@ -684,27 +909,27 @@ impl Engine {
     // ── pedals & controls ────────────────────────────────────────────────────
 
     pub fn control(&mut self, cc: u8, value: u8, now: u64) -> Option<NoteOutcome> {
-        match cc {
-            1 => {
+        match self.cc_map.target(cc)? {
+            Control::Wheel => {
                 self.set_wheel(value);
                 None
             }
-            11 => {
+            Control::Gate => {
                 self.timing_ms = 40 + ((value as u64) * 200 / 127);
                 None
             }
-            64 => {
+            Control::Sustain => {
                 self.sustain = value >= 64;
                 None
             }
-            66 => {
+            Control::Sostenuto => {
                 if value >= 64 && !self.sostenuto {
                     self.sostenito_press(now);
                 }
                 self.sostenuto = value >= 64;
                 None
             }
-            67 => {
+            Control::Soft => {
                 let was = self.soft;
                 self.soft = value >= 64;
                 if self.soft && !was {
@@ -712,11 +937,10 @@ impl Engine {
                 }
                 None
             }
-            123 => {
+            Control::Panic => {
                 self.all_notes_off();
                 None
             }
-            _ => None,
         }
     }
 
@@ -857,13 +1081,28 @@ impl Engine {
     pub fn delete_word(&mut self) {
         self.session = None;
         self.snapshot();
-        while self.cells.last().map(|c| c.ch.is_whitespace()).unwrap_or(false) {
+        while self
+            .cells
+            .last()
+            .map(|c| c.ch.is_whitespace())
+            .unwrap_or(false)
+        {
             self.cells.pop();
         }
-        while self.cells.last().map(|c| !c.ch.is_whitespace()).unwrap_or(false) {
+        while self
+            .cells
+            .last()
+            .map(|c| !c.ch.is_whitespace())
+            .unwrap_or(false)
+        {
             self.cells.pop();
         }
-        while self.cells.last().map(|c| c.ch.is_whitespace()).unwrap_or(false) {
+        while self
+            .cells
+            .last()
+            .map(|c| c.ch.is_whitespace())
+            .unwrap_or(false)
+        {
             self.cells.pop();
         }
         self.recompute_last_token();
@@ -880,10 +1119,7 @@ impl Engine {
 
     fn recompute_last_token(&mut self) {
         let text = self.text();
-        self.last_token = text
-            .split_whitespace()
-            .last()
-            .map(|s| s.to_string());
+        self.last_token = text.split_whitespace().last().map(|s| s.to_string());
     }
 
     // ── quantize ─────────────────────────────────────────────────────────────
@@ -1077,7 +1313,12 @@ impl Engine {
         }
         self.char_log.push_back((now, count));
         let cutoff = now.saturating_sub(120_000);
-        while self.char_log.front().map(|(t, _)| *t < cutoff).unwrap_or(false) {
+        while self
+            .char_log
+            .front()
+            .map(|(t, _)| *t < cutoff)
+            .unwrap_or(false)
+        {
             self.char_log.pop_front();
         }
     }
@@ -1107,11 +1348,9 @@ impl Engine {
             .find(|(t, _)| *t >= cutoff)
             .map(|(t, _)| *t)
             .unwrap_or(now);
-        let elapsed_ms = now.saturating_sub(first).max(2_500).min(60_000);
+        let elapsed_ms = now.saturating_sub(first).clamp(2_500, 60_000);
         let minutes = elapsed_ms as f32 / 60_000.0;
-        ((chars as f32 / 5.0) / minutes)
-            .round()
-            .clamp(0.0, 240.0) as u32
+        ((chars as f32 / 5.0) / minutes).round().clamp(0.0, 240.0) as u32
     }
 
     pub fn held_white(&self) -> [bool; 15] {
@@ -1588,6 +1827,46 @@ mod tests {
         assert!(e.accept_candidate(1_200));
         assert!(e.text().starts_with(first));
         assert_eq!(e.last_token.as_deref(), Some(first));
+    }
+
+    #[test]
+    fn default_cc_map_routes_the_standard_pedals() {
+        let map = CcMap::default();
+        assert_eq!(map.target(64), Some(Control::Sustain));
+        assert_eq!(map.target(67), Some(Control::Soft));
+        assert_eq!(map.target(66), Some(Control::Sostenuto));
+        assert_eq!(map.target(1), Some(Control::Wheel));
+        assert_eq!(map.target(11), Some(Control::Gate));
+        assert_eq!(map.target(123), Some(Control::Panic));
+        assert_eq!(map.target(20), None);
+    }
+
+    #[test]
+    fn learning_a_used_cc_swaps_the_two_controls() {
+        let mut map = CcMap::default();
+        map.assign(Control::Sustain, 1);
+        assert_eq!(map.sustain, 1);
+        assert_eq!(map.wheel, 64);
+        assert_eq!(map.target(1), Some(Control::Sustain));
+        assert_eq!(map.target(64), Some(Control::Wheel));
+    }
+
+    #[test]
+    fn learned_cc_reaches_the_engine() {
+        let mut e = engine();
+        e.cc_map.assign(Control::Sustain, 80);
+        e.control(64, 127, 0);
+        assert!(!e.sustain);
+        e.control(80, 127, 0);
+        assert!(e.sustain);
+    }
+
+    #[test]
+    fn unknown_cc_is_ignored() {
+        let mut e = engine();
+        assert!(e.control(20, 127, 0).is_none());
+        assert!(!e.sustain);
+        assert!(!e.soft);
     }
 
     #[test]
