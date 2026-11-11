@@ -12,7 +12,6 @@ The first installable build.
   with automatic swaps when a number is already in use.
 - Corrupt settings are moved aside instead of blocking launch.
 - 54 tests, including CC routing, learning swaps and settings round-trips.
-- macOS CI and a tag-triggered release workflow.
 - MIT license.
 
 **Changed**
