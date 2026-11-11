@@ -138,10 +138,11 @@ KeyChange/
 └── assets/
     ├── og.png          The 1200×630 social card.
     ├── og-card.html    The hand-built source for that card.
+    ├── audio/piano/    30 Salamander grand-piano samples (CC BY 3.0).
     └── *.webp          README screenshots, straight from the live page.
 ```
 
-**Stack:** semantic HTML, hand-written CSS, vanilla JavaScript, Canvas 2D, Web Audio API, Web MIDI API, Google Fonts. No frameworks, no trackers, no cookies.
+**Stack:** semantic HTML, hand-written CSS, vanilla JavaScript, Canvas 2D, Web Audio API, Web MIDI API, Google Fonts. The piano voice is a **Salamander Grand Piano V3** sampler (one sample every three semitones) with velocity-shaped filters, stereo spread, a convolution room, a master compressor and a measured tuning correction — plus an additive fallback if the samples can't load. The middle of the keyboard loads first; outer octaves arrive when the page is idle. No frameworks, no trackers, no cookies.
 
 **Polish included:** canonical URL, Open Graph and Twitter cards, JSON-LD `SoftwareApplication` schema, a full favicon family, web manifest, sitemap, `robots.txt`, and `prefers-*`-friendly type fallbacks.
 

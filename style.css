@@ -24,7 +24,8 @@ a{color:inherit}
 #loader.done{opacity:0;visibility:hidden}
 .loader-inner{text-align:center;width:min(560px,90vw)}
 .loader-top{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:4px;color:var(--yellow);font-weight:700}
-.loader-big{font-family:Anton,Unbounded,sans-serif;font-size:clamp(60px,12vw,130px);line-height:.95;margin:10px 0;text-transform:uppercase}
+.loader-big{font-family:Anton,Unbounded,sans-serif;font-size:clamp(60px,12vw,130px);line-height:.95;margin:10px 0;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;justify-content:center}
+.loader-big span{display:block;transform-origin:center center;will-change:transform}
 .loader-bar{height:14px;border:2px solid var(--paper);margin:18px 0}
 .loader-bar span{display:block;height:100%;width:0;background:var(--yellow)}
 .loader-sub{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:2px;opacity:.7}

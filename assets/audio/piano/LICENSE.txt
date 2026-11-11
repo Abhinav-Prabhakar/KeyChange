@@ -1,0 +1,18 @@
+Salamander Grand Piano V3
+======================
+
+Piano samples in this folder are from the Salamander Grand Piano V3
+by Alexander Holm.
+
+Source: https://archive.org/details/SalamanderGrandPianoV3
+Sample distribution: https://tonejs.github.io/audio/salamander/
+
+Licensed under the Creative Commons Attribution 3.0 Unported (CC BY 3.0):
+https://creativecommons.org/licenses/by/3.0/
+
+Files here are a reduced set prepared for the web instrument: one note
+every three semitones (A0 to C8), taken from the mid-velocity layer
+(v8) of the original set, with the inaudible tail trimmed and a short
+fade added at the end. Each file is a 96 kbps mono MP3 at 44.1 kHz.
+The audio is otherwise unmodified; gain, velocity filtering, stereo
+panning, reverb and compression are applied at runtime by app.js.
