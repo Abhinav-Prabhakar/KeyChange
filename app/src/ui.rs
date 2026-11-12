@@ -10,8 +10,9 @@ use gpui::{
 };
 
 use crate::engine::{
-    chord_pads, freq_for, note_name, Control, Engine, KeyKind, Layer, Pedal, BLACK_MIDI,
-    BLACK_SLOTS, DEFAULT_LETTERS, WHITE_MIDI,
+    chord_pads, freq_for, note_name, Control, Engine, KeyKind, Layer, Pedal, BIGRAM_COUNT,
+    BLACK_MIDI, BLACK_SLOTS, DEFAULT_LETTERS, EXTRA_TRIADS, INTERVALS, INTERVALS_DOWN,
+    INTERVALS_HIGH, WHITE_MIDI, WORDS_LOW, WORD_CHORD_COUNT,
 };
 use crate::midi::{self, MidiHub, MidiMsg, MidiStatus, Packet, Source};
 use crate::settings::Settings;
@@ -948,11 +949,9 @@ impl KeyChangeApp {
                             )
                             .child(caps("SCORE", 8.5).text_color(faint())),
                     )
-                    .child(
-                        mono(8.5)
-                            .text_color(faint())
-                            .child("C3 — C5  ·  15 KEYS  ·  6 WORDS"),
-                    ),
+                    .child(mono(8.5).text_color(faint()).child(format!(
+                        "C3 — C5  ·  {WORD_CHORD_COUNT} WORDS  ·  {BIGRAM_COUNT} BIGRAMS"
+                    ))),
             )
             // body: transcript + rail
             .child(
@@ -2028,8 +2027,8 @@ impl KeyChangeApp {
                     .flex_col()
                     .items_end()
                     .gap(px(2.))
-                    .child(caps("⌘D DEMO", 7.))
-                    .child(caps("⌘C COPY · ⌘Z UNDO · TAB MAP · ⌘, MIDI", 7.).text_color(faint())),
+                    .child(caps("⌘D DEMO · ⌘C COPY · ⌘Z UNDO", 7.))
+                    .child(caps("TAB MAP · ⌘, MIDI · ? BANKS", 7.).text_color(faint())),
             )
     }
 
@@ -2778,25 +2777,44 @@ impl KeyChangeApp {
     }
 
     fn gestures_body(&self) -> Div {
-        let mut chords = div().flex().flex_col().gap(px(7.));
+        let word_chip = |text: String| {
+            div()
+                .w(px(86.))
+                .px(px(5.))
+                .py(px(3.))
+                .rounded(px(5.))
+                .bg(side())
+                .child(mono(8.).text_color(ink()).child(text))
+        };
+        let interval_chip = |text: String| {
+            div()
+                .w(px(82.))
+                .px(px(5.))
+                .py(px(3.))
+                .rounded(px(5.))
+                .bg(side())
+                .child(mono(8.).text_color(ink()).child(text))
+        };
+
+        let mut chords = div().flex().flex_col().gap(px(4.));
         for (i, pad) in chord_pads().iter().enumerate() {
             chords = chords.child(
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(10.))
+                    .gap(px(9.))
                     .child(triad_diagram(i, false))
                     .child(
                         div()
                             .font_family(UI)
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_size(px(12.))
+                            .text_size(px(11.5))
                             .text_color(ink())
                             .child(pad.word),
                     )
                     .child(div().flex_1())
-                    .child(mono(8.).text_color(faint()).child(format!(
+                    .child(mono(7.5).text_color(faint()).child(format!(
                         "{} {} {}",
                         note_name(pad.notes[0]),
                         note_name(pad.notes[1]),
@@ -2805,61 +2823,56 @@ impl KeyChangeApp {
             );
         }
 
-        let mut intervals = div().flex().flex_col().gap(px(9.));
-        for (semi, text) in crate::engine::INTERVALS {
-            let dots = (0..semi.min(9))
-                .map(|_| div().w(px(2.)).h(px(2.)).rounded_full().bg(op(ink(), 0.45)));
-            intervals = intervals.child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .w(px(96.))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(2.))
-                            .child(div().size(px(7.)).rounded_full().bg(ink()))
-                            .children(dots)
-                            .child(div().size(px(7.)).rounded_full().bg(ink())),
-                    )
-                    .child(
-                        div()
-                            .font_family(UI)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_size(px(12.))
-                            .text_color(ink())
-                            .child(text),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        mono(8.)
-                            .text_color(faint())
-                            .child(format!("{semi} SEMITONES")),
-                    ),
-            );
+        let mut low = div().flex().flex_row().flex_wrap().gap(px(4.));
+        for (i, word) in WORDS_LOW.iter().enumerate() {
+            let notes = chord_pads()[i].notes.map(|n| n - 12);
+            low = low.child(word_chip(format!(
+                "{} {} {} · {word}",
+                note_name(notes[0]),
+                note_name(notes[1]),
+                note_name(notes[2])
+            )));
+        }
+
+        let mut extra = div().flex().flex_row().flex_wrap().gap(px(4.));
+        for (_, root, word) in EXTRA_TRIADS {
+            extra = extra.child(word_chip(format!("{root} · {word}")));
+        }
+
+        let mut up = div().flex().flex_row().flex_wrap().gap(px(4.));
+        for (semi, text) in INTERVALS {
+            up = up.child(interval_chip(format!("↑{semi} · {text}")));
+        }
+        let mut down = div().flex().flex_row().flex_wrap().gap(px(4.));
+        for (semi, text) in INTERVALS_DOWN {
+            down = down.child(interval_chip(format!("↓{semi} · {text}")));
+        }
+        let mut high = div().flex().flex_row().flex_wrap().gap(px(4.));
+        for (semi, text) in INTERVALS_HIGH {
+            high = high.child(interval_chip(format!("{semi} · {text}")));
         }
 
         div()
             .flex()
             .flex_col()
-            .gap(px(16.))
+            .gap(px(14.))
             .child(
                 div()
                     .flex()
                     .flex_row()
-                    .gap(px(26.))
+                    .gap(px(22.))
                     .child(
                         div()
                             .flex_1()
                             .flex()
                             .flex_col()
-                            .gap(px(8.))
-                            .child(caps("WORD CHORDS", 8.))
-                            .child(chords),
+                            .gap(px(6.))
+                            .child(caps("WORD CHORDS · C3–C5", 8.))
+                            .child(chords)
+                            .child(caps("LOW OCTAVE · C2–B2", 8.))
+                            .child(low)
+                            .child(caps("EXTRA TRIADS · SHARPS AND MINORS", 8.))
+                            .child(extra),
                     )
                     .child(div().w(px(1.)).bg(hair()))
                     .child(
@@ -2867,9 +2880,13 @@ impl KeyChangeApp {
                             .flex_1()
                             .flex()
                             .flex_col()
-                            .gap(px(8.))
-                            .child(caps("INTERVAL BIGRAMS", 8.))
-                            .child(intervals),
+                            .gap(px(6.))
+                            .child(caps("INTERVALS ↑ · SECOND NOTE HIGHER", 8.))
+                            .child(up)
+                            .child(caps("INTERVALS ↓ · SECOND NOTE LOWER", 8.))
+                            .child(down)
+                            .child(caps("HIGH OCTAVE · ABOVE C5", 8.))
+                            .child(high),
                     ),
             )
             .child(

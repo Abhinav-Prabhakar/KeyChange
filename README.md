@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://github.com/Abhinav-Prabhakar/KeyChange/releases/latest">
-    <img src="app/assets/screenshot.png" alt="The KeyChange app after a simulated performance: the transcript reads “the and you that have with the hello”, above a staff of notes, word chords and a lit piano keyboard" width="100%">
+    <img src="app/assets/screenshot.png" alt="The KeyChange app after a simulated performance: the transcript reads “the and you that have with the hello of to in this but from”, above a staff of notes, word chords and a lit piano keyboard" width="100%">
   </a>
 </p>
 
@@ -28,7 +28,7 @@
 
 > **Typing was never meant to clack. It was meant to sing.** So we tuned every letter, gave punctuation rhythm, and turned QWERTY into an instrument. Every key types. Every chord shortcuts. Every song — a document.
 
-**KeyChange** is a MIDI text instrument. Plug in a piano, play a letter, and watch it land in a live transcript. Hit a key harder and it gets **bolder**; tap soft and it turns *italic*. Sustain holds your spaces, three-note chords fire whole words, and the staff snaps sloppy hands into perfect spelling.
+**KeyChange** is a MIDI text instrument. Plug in a piano, play a letter, and watch it land in a live transcript. Hit a key harder and it gets **bolder**; tap soft and it turns *italic*. Sustain holds your spaces, three-note chords fire **24 common words**, two-note intervals type **25 bigrams**, and the staff snaps sloppy hands into perfect spelling.
 
 It comes in two pieces: a **native macOS app** you can install in half a minute, and a **playable web page** that runs the same idea in your browser with no install at all.
 
@@ -70,7 +70,7 @@ Intel Macs and Windows/Linux are not packaged yet. The source builds with Cargo 
 
 ### The whole instrument, one calm screen
 
-<img src="app/assets/screenshot-empty.png" alt="KeyChange at rest: an empty score with the prompt “play your words loud”, six word-chord pads, fifteen piano keys and a control deck" width="100%">
+<img src="app/assets/screenshot-empty.png" alt="KeyChange at rest: an empty score with the prompt “play your words loud”, six word-chord pads, fifteen piano keys, a control deck and the 24 words / 25 bigrams count" width="100%">
 
 Nothing is buried in a tab, a modal or a settings page. The transcript, staff, six word-chord pads, fifteen-key piano and the control deck are always on screen. The two reference cards are optional.
 
@@ -88,7 +88,7 @@ Press **Tab**. Every key shows its letter frequency and its physical effort, sco
 
 ### Every gesture in one place
 
-<img src="app/assets/screenshot-gestures.png" alt="The Gestures overlay listing word chords, interval bigrams and every keyboard shortcut" width="100%">
+<img src="app/assets/screenshot-gestures.png" alt="The Gestures overlay grouped into banks: main word chords, the low octave bank, twelve extra triads, up and down intervals, high-octave bigrams and every keyboard shortcut" width="100%">
 
 Press **?** for the cheat sheet: word chords, interval bigrams, and every shortcut in one card. Nothing to memorize, nothing to hunt for.
 
@@ -114,8 +114,11 @@ Fifteen white keys carry the letters. Ten black keys carry punctuation. The deck
 |---|---|
 | **Play a white key** | Types its letter |
 | **Play it harder** | Soft = *italic*, medium = plain, hard = **bold**, hardest = highlight |
-| **Play two notes** | Types an interval bigram (`th`, `he`, `in`, `er`, `an`, `ing`, `ed`) |
-| **Play three notes** | Types a whole word: `the`, `and`, `you`, `that`, `have`, `with` |
+| **Play two notes upward** | Types a bigram: `th`, `he`, `in`, `er`, `an`, `ing`, `ed` |
+| **Play two notes downward** | A second set: `to`, `of`, `is`, `it`, `or`, `on`, `at` |
+| **Play two notes above C5** | Eleven more: `re`, `en`, `nd`, `ti`, `es`, `te`, `al`, `ar`, `st`, `nt`, `ng` |
+| **Play three notes** | Types a whole word: `the`, `and`, `you`, `that`, `have`, `with`, plus 12 sharp/minor triads |
+| **Play a pad below C3** | The same six shapes become a second bank: `of`, `to`, `in`, `it`, `for`, `not` |
 | **Roll a chord** | Notes inside the gate window count as one chord; the gate is adjustable |
 | **Hold sustain** | Holds the gap between words so you can type legato |
 | **Tap soft** | Cycles the layer: `abc` → `ABC` → `123!?` |
@@ -144,6 +147,23 @@ No piano? The app is fully playable from the laptop.
 | `⌘Z` | Undo |
 | `⌘K` | Clear the score (undoable) |
 | `Esc` | Close an overlay or cancel a remap |
+
+### Three banks, one keyboard
+
+The app uses the octaves a real piano already gives you:
+
+- **Main word pads, C3–C5** — `the and you that have with`.
+- **Low bank, C2–B2** — the same six triad shapes one octave lower type
+  `of to in it for not`. A 49-key controller already covers this range.
+- **Extra triads** — twelve sharp and minor shapes add `this but from they will
+  one about would there what when like`.
+- **Bigrams, three ways** — play the second note higher for the seven core
+  bigrams, lower for another seven, and above C5 for eleven more. Direction is
+  the whole trick: one interval, two words.
+
+Press **?** any time to see every mapping, grouped by bank. The keyboard on
+screen stays the same two octaves, so the instrument still fits in one calm
+window; the extra keys are the ones already under your hands.
 
 ### The small things it does for you
 
@@ -227,7 +247,7 @@ cargo run          # development build
 make app           # KeyChange.app in app/dist/
 make dmg           # KeyChange-<version>.dmg in app/dist/
 make icon          # re-render assets/AppIcon.icns from icon.svg
-cargo test         # 57 tests
+cargo test         # 63 tests
 ```
 
 `cargo run` is the fastest loop. The bundle adds the app icon, the proper name in the menu bar, and a stable settings location. `KC_DEMO=1 cargo run` starts the simulated performance immediately.
@@ -244,7 +264,7 @@ python3 -m http.server 8099
 - **Rust + [GPUI](https://gpui.rs)** — the renderer behind Zed. One native window, no WebView, no Electron.
 - **[midir](https://github.com/Boddlnagg/midir)** — raw MIDI I/O with a reconnecting device hub.
 - **Serde + JSON** — settings in `~/Library/Application Support/KeyChange/settings.json` (XDG paths elsewhere), written atomically, with corrupt files moved aside instead of blocking launch.
-- **57 unit tests** — velocity buckets, chord timing, interval and octave gestures, sustain gaps, quantize and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC routing and learning, settings round-trips and repair, MIDI byte parsing and the demo script.
+- **63 unit tests** — velocity buckets, chord timing, interval and octave gestures, sustain gaps, quantize and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC routing and learning, settings round-trips and repair, MIDI byte parsing and the demo script.
 
 Read [`app/README.md`](app/README.md) for the architecture, the full gesture map and the design notes.
 
@@ -252,7 +272,7 @@ Read [`app/README.md`](app/README.md) for the architecture, the full gesture map
 
 ## Release notes
 
-Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.3.1**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
+Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.4.0**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

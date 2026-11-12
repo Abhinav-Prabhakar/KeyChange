@@ -58,6 +58,8 @@ pub const NUM_ROW: [&str; 15] = [
 pub const BLACK_GLYPHS: [&str; 10] = [",", ".", ";", "'", ":", "!", "?", "—", "_", "…"];
 
 pub const WORDS: [&str; 6] = ["the", "and", "you", "that", "have", "with"];
+/// The same six triads played below C3 type the next six common words.
+pub const WORDS_LOW: [&str; 6] = ["of", "to", "in", "it", "for", "not"];
 /// Display root for the six diatonic word chords (C, D, E, F, G, A).
 pub const WORD_ROOTS: [&str; 6] = ["C", "D", "E", "F", "G", "A"];
 /// The six triad shapes as pitch classes, in [`WORDS`] order.
@@ -70,7 +72,26 @@ pub const WORD_TRIADS: [[i32; 3]; 6] = [
     [9, 0, 4],  // Am with
 ];
 
+/// Twelve more common words on triads that use at least one black key. None of
+/// these pitch-class sets collide with [`WORD_TRIADS`], so the low and main
+/// banks stay unambiguous. `(pitch classes, display root, word)`.
+pub const EXTRA_TRIADS: [([i32; 3], &str, &str); 12] = [
+    ([1, 5, 8], "C#", "this"),
+    ([2, 6, 9], "D", "but"),
+    ([3, 7, 10], "D#", "from"),
+    ([4, 8, 11], "E", "they"),
+    ([5, 8, 0], "Fm", "will"),
+    ([6, 10, 1], "F#", "one"),
+    ([7, 10, 2], "Gm", "about"),
+    ([8, 0, 3], "G#", "would"),
+    ([9, 1, 4], "A", "there"),
+    ([10, 2, 5], "A#", "what"),
+    ([11, 3, 6], "B", "when"),
+    ([11, 2, 6], "Bm", "like"),
+];
+
 /// Two-note intervals, by semitone distance, in the order we teach them.
+/// Play the second note higher for these; lower uses [`INTERVALS_DOWN`].
 pub const INTERVALS: [(i32, &str); 7] = [
     (1, "th"),
     (2, "he"),
@@ -80,6 +101,37 @@ pub const INTERVALS: [(i32, &str); 7] = [
     (7, "ing"),
     (9, "ed"),
 ];
+
+/// The same seven intervals played downwards. One gesture, two directions,
+/// fourteen bigrams.
+pub const INTERVALS_DOWN: [(i32, &str); 7] = [
+    (1, "to"),
+    (2, "of"),
+    (3, "is"),
+    (4, "it"),
+    (5, "or"),
+    (7, "on"),
+    (9, "at"),
+];
+
+/// Two notes above C5 unlock eleven more bigrams, including the intervals the
+/// main table does not use.
+pub const INTERVALS_HIGH: [(i32, &str); 11] = [
+    (1, "re"),
+    (2, "en"),
+    (3, "nd"),
+    (4, "ti"),
+    (5, "es"),
+    (6, "te"),
+    (7, "al"),
+    (8, "ar"),
+    (9, "st"),
+    (10, "nt"),
+    (11, "ng"),
+];
+
+pub const WORD_CHORD_COUNT: usize = WORDS.len() + WORDS_LOW.len() + EXTRA_TRIADS.len();
+pub const BIGRAM_COUNT: usize = INTERVALS.len() + INTERVALS_DOWN.len() + INTERVALS_HIGH.len();
 
 /// Chords shown on the pad bank, computed from the live layout so the pad
 /// diagrams always match the keys you actually press.
@@ -842,7 +894,39 @@ impl Engine {
                 .map(|s| !s.notes.is_empty())
                 .unwrap_or(false)
         {
-            let start = self.session.as_ref().map(|s| s.start).unwrap_or(0);
+            let mut start = self.session.as_ref().map(|s| s.start).unwrap_or(0);
+            // A tight punctuation key trims the gap before it when it opens a
+            // session. If that key turns out to be the root of a chord, put the
+            // gap back so the word does not weld itself to the previous one.
+            let black_first = self
+                .session
+                .as_ref()
+                .and_then(|s| s.notes.first())
+                .map(|n| n.step.is_none())
+                .unwrap_or(false);
+            let needs_gap = matches!(gesture, Gesture::Word(_))
+                && black_first
+                && start > 0
+                && !self
+                    .cells
+                    .get(start.saturating_sub(1))
+                    .map(|c| c.ch.is_whitespace())
+                    .unwrap_or(true);
+            if needs_gap {
+                self.cells.insert(
+                    start,
+                    Cell {
+                        ch: ' ',
+                        kind: CharKind::Space,
+                        vel: 70,
+                        corrected: false,
+                    },
+                );
+                start += 1;
+                if let Some(s) = &mut self.session {
+                    s.start = start;
+                }
+            }
             let current: String = self.cells.iter().skip(start).map(|c| c.ch).collect();
             if current != text {
                 self.cells.truncate(start);
@@ -892,46 +976,74 @@ impl Engine {
         if s.notes.is_empty() {
             return None;
         }
-        let all_white = s.notes.iter().all(|n| n.step.is_some());
-        if all_white {
-            if s.notes.len() == 3 {
-                let mut pcs: Vec<i32> = s
+        if s.notes.len() == 3 {
+            let mut pcs: Vec<i32> = s.notes.iter().map(|n| (n.note as i32) % 12).collect();
+            pcs.sort_unstable();
+            pcs.dedup();
+            if pcs.len() == 3 {
+                // The same six pads are a second word bank below C3. That lets
+                // a 49-key controller type twelve words without learning new
+                // triad shapes.
+                let low = s
                     .notes
                     .iter()
-                    .filter_map(|n| n.step.map(|_| (n.note as i32) % 12))
-                    .collect();
-                pcs.sort_unstable();
-                pcs.dedup();
-                if pcs.len() == 3 {
-                    for (triad, word) in WORD_TRIADS.iter().zip(WORDS) {
-                        let mut t = triad.to_vec();
-                        t.sort_unstable();
-                        if t == pcs {
-                            return Some((format!("{word} "), Gesture::Word(word), true));
-                        }
+                    .map(|n| n.note)
+                    .min()
+                    .map(|n| n < WHITE_MIDI[0])
+                    .unwrap_or(false);
+                for (i, triad) in WORD_TRIADS.iter().enumerate() {
+                    let mut t = triad.to_vec();
+                    t.sort_unstable();
+                    if t == pcs {
+                        let word = if low { WORDS_LOW[i] } else { WORDS[i] };
+                        return Some((format!("{word} "), Gesture::Word(word), true));
                     }
                 }
-            } else if s.notes.len() == 2 {
-                let a = s.notes[0].note as i32;
-                let b = s.notes[1].note as i32;
-                let (lo, hi) = if a < b { (a, b) } else { (b, a) };
-                if hi > lo && (hi - lo) % 12 == 0 {
-                    let token = self.last_token.clone()?;
-                    let gap = if s.start == 0
-                        || self
-                            .cells
-                            .get(s.start.saturating_sub(1))
-                            .map(|c| c.ch.is_whitespace())
-                            .unwrap_or(true)
-                    {
-                        ""
-                    } else {
-                        " "
-                    };
-                    return Some((format!("{gap}{token} "), Gesture::Repeat, true));
+                // Triads with a black key add twelve more words and never
+                // collide with the diatonic pads.
+                for (triad, _, word) in EXTRA_TRIADS {
+                    let mut t = triad.to_vec();
+                    t.sort_unstable();
+                    if t == pcs {
+                        return Some((format!("{word} "), Gesture::Word(word), true));
+                    }
                 }
-                let d = (hi - lo).rem_euclid(12);
-                if let Some((_, bigram)) = INTERVALS.iter().find(|(semi, _)| *semi == d) {
+            }
+        } else if s.notes.len() == 2 {
+            let a = s.notes[0].note as i32;
+            let b = s.notes[1].note as i32;
+            let (lo, hi) = if a < b { (a, b) } else { (b, a) };
+            let all_white = s.notes.iter().all(|n| n.step.is_some());
+            if hi > lo && (hi - lo) % 12 == 0 && all_white {
+                let token = self.last_token.clone()?;
+                let gap = if s.start == 0
+                    || self
+                        .cells
+                        .get(s.start.saturating_sub(1))
+                        .map(|c| c.ch.is_whitespace())
+                        .unwrap_or(true)
+                {
+                    ""
+                } else {
+                    " "
+                };
+                return Some((format!("{gap}{token} "), Gesture::Repeat, true));
+            }
+            let d = (hi - lo).rem_euclid(12);
+            // Above C5 the same interval becomes another bigram. This is the
+            // only place a black key can start a two-note gesture, so it never
+            // fights the punctuation keys.
+            if lo > WHITE_MIDI[14] as i32 {
+                if let Some((_, bigram)) = INTERVALS_HIGH.iter().find(|(semi, _)| *semi == d) {
+                    return Some((bigram.to_string(), Gesture::Interval(bigram), false));
+                }
+            } else if all_white {
+                let table = if a < b {
+                    &INTERVALS[..]
+                } else {
+                    &INTERVALS_DOWN[..]
+                };
+                if let Some((_, bigram)) = table.iter().find(|(semi, _)| *semi == d) {
                     return Some((bigram.to_string(), Gesture::Interval(bigram), false));
                 }
             }
@@ -1791,6 +1903,121 @@ mod tests {
             }
             assert!(e.text().starts_with(pad.word), "{:?}", e.text());
         }
+    }
+
+    #[test]
+    fn low_octave_triads_type_the_next_six_words() {
+        let voicings: [[u8; 3]; 6] = [
+            [36, 40, 43], // C2  E2  G2  → of
+            [38, 41, 45], // D2  F2  A2  → to
+            [40, 43, 47], // E2  G2  B2  → in
+            [41, 45, 48], // F2  A2  C3  → it
+            [43, 47, 50], // G2  B2  D3  → for
+            [45, 48, 52], // A2  C3  E3  → not
+        ];
+        for (i, notes) in voicings.iter().enumerate() {
+            let mut e = engine();
+            chord(&mut e, notes, 0);
+            assert!(
+                e.text().starts_with(WORDS_LOW[i]),
+                "{notes:?} typed {:?}, wanted {}",
+                e.text(),
+                WORDS_LOW[i]
+            );
+        }
+    }
+
+    #[test]
+    fn black_key_triads_type_twelve_more_words() {
+        // Root-position triads for every entry, transposed near middle C.
+        let voicings: [[u8; 3]; 12] = [
+            [61, 65, 68], // C#
+            [62, 66, 69], // D
+            [63, 67, 70], // D#
+            [64, 68, 71], // E
+            [60, 65, 68], // Fm
+            [66, 70, 73], // F#
+            [62, 67, 70], // Gm
+            [60, 63, 68], // G#
+            [61, 64, 69], // A
+            [62, 65, 70], // A#
+            [59, 63, 66], // B
+            [59, 62, 66], // Bm
+        ];
+        for (i, notes) in voicings.iter().enumerate() {
+            let mut e = engine();
+            chord(&mut e, notes, 0);
+            let word = EXTRA_TRIADS[i].2;
+            assert!(
+                e.text().starts_with(word),
+                "{notes:?} typed {:?}, wanted {word}",
+                e.text()
+            );
+        }
+    }
+
+    #[test]
+    fn every_word_chord_is_unique() {
+        let mut seen: Vec<Vec<i32>> = Vec::new();
+        for triad in WORD_TRIADS {
+            let mut t = triad.to_vec();
+            t.sort_unstable();
+            assert!(!seen.contains(&t), "duplicate diatonic triad {t:?}");
+            seen.push(t);
+        }
+        for (triad, _, word) in EXTRA_TRIADS {
+            let mut t = triad.to_vec();
+            t.sort_unstable();
+            assert!(!seen.contains(&t), "duplicate triad for {word}: {t:?}");
+            seen.push(t);
+        }
+        assert_eq!(
+            seen.len(),
+            WORD_TRIADS.len() + EXTRA_TRIADS.len(),
+            "the low bank reuses the six diatonic triads"
+        );
+        assert_eq!(WORD_CHORD_COUNT, seen.len() + WORDS_LOW.len());
+        let mut words: Vec<&str> = WORDS
+            .iter()
+            .chain(WORDS_LOW.iter())
+            .chain(EXTRA_TRIADS.iter().map(|(_, _, word)| word))
+            .copied()
+            .collect();
+        words.sort_unstable();
+        words.dedup();
+        assert_eq!(words.len(), WORD_CHORD_COUNT);
+    }
+
+    #[test]
+    fn descending_intervals_type_the_mirror_bigrams() {
+        let mut e = engine();
+        e.note_on(53, 90, 0);
+        e.note_on(48, 90, 30); // F down to C = perfect fourth down → "or"
+        assert_eq!(e.text(), "or");
+
+        let mut e = engine();
+        e.note_on(57, 90, 0);
+        e.note_on(53, 90, 30); // A down to F = major third down → "it"
+        assert_eq!(e.text(), "it");
+    }
+
+    #[test]
+    fn high_octave_intervals_type_eleven_more_bigrams() {
+        for (semi, text) in INTERVALS_HIGH {
+            let mut e = engine();
+            let lo = 74; // D5
+            e.note_on(lo, 90, 0);
+            e.note_on(lo + semi as u8, 90, 30);
+            assert_eq!(e.text(), text, "interval {semi} should type {text}");
+        }
+    }
+
+    #[test]
+    fn high_bank_wins_over_the_main_bank_above_c5() {
+        let mut e = engine();
+        e.note_on(74, 90, 0);
+        e.note_on(76, 90, 30); // whole tone above C5 → "en", not "he"
+        assert_eq!(e.text(), "en");
     }
 
     #[test]

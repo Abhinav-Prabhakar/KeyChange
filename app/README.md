@@ -6,14 +6,14 @@
 
 A native MIDI text instrument in one window. Plug in a piano, play a letter, and
 watch it land in a live score. Loud notes come out **bold**, soft notes come out
-*italic*, chords fire whole words, and the staff snaps sloppy hands into perfect
-spelling.
+*italic*, chords fire **24 common words**, intervals type **25 bigrams**, and the
+staff snaps sloppy hands into perfect spelling.
 
 Built in Rust with [GPUI](https://gpui.rs) (the renderer behind Zed) and
 [`midir`](https://github.com/Boddlnagg/midir) for MIDI I/O. No browser, no build
 step, no account.
 
-<img src="assets/screenshot.png" alt="The KeyChange desktop instrument after a simulated performance — the transcript reads “the and you that have with the hello”, with a staff of notes and the NOW tile showing the current word" width="100%">
+<img src="assets/screenshot.png" alt="The KeyChange desktop instrument after a simulated performance — the transcript reads “the and you that have with the hello of to in this but from”, with a staff of notes and the NOW tile showing the current word" width="100%">
 
 ## Install it
 
@@ -57,7 +57,7 @@ Learn) are reference cards, not required steps.
 | **Overlays** | **Tab** — the Huffman map. **?** — gestures and shortcuts. **⌘,** — MIDI Learn. |
 | **Score** | The transcript, a 20-note staff, and the right rail: NOW (note / interval / chord), WPM and a wheel history. Hover any key or pad to reveal numbers in the rail. |
 | **Chord pads** | Six triads — `the and you that have with` — each showing its three keys and its share of English. Click or play them. |
-| **Keyboard** | Fifteen white keys (Huffman letters) and ten black keys (punctuation), with heat strips, live held-note rings and per-key velocity. |
+| **Keyboard** | Fifteen white keys (Huffman letters) and ten black keys (punctuation), with heat strips, live held-note rings and per-key velocity. The drawn two octaves are the main bank; the rest of your controller reaches the low and high banks. |
 | **Deck** | Sustain / soft / sostenuto pedals, a 40–240 ms gate slider, mod-wheel scrubber and base velocity. |
 | **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, live word / character / fix counts and profile quality. |
 
@@ -70,7 +70,11 @@ Learn) are reference cards, not required steps.
 | One key | Letter (or punctuation on a black key) |
 | Key in another octave | Same letter — octaves are free |
 | Three notes (a pad triad) | Whole word: `the`, `and`, `you`, `that`, `have`, `with` |
-| Two notes, 1–9 semitones | Bigram: `th`, `he`, `in`, `er`, `an`, `ing`, `ed` |
+| The same triad below C3 | The low bank: `of`, `to`, `in`, `it`, `for`, `not` |
+| A sharp or minor triad | One of twelve more words: `this but from they will one about would there what when like` |
+| Two notes going up, 1–9 semitones | Bigram: `th`, `he`, `in`, `er`, `an`, `ing`, `ed` |
+| Two notes going down, same intervals | A second set: `to`, `of`, `is`, `it`, `or`, `on`, `at` |
+| Two notes above C5 | Eleven more: `re`, `en`, `nd`, `ti`, `es`, `te`, `al`, `ar`, `st`, `nt`, `ng` |
 | Two notes, an octave apart | Repeat the last completed word |
 | Sustain (CC64) | Word gaps — spaces follow legato |
 | Soft (CC67) | Cycle to the next layer |
@@ -82,6 +86,27 @@ Learn) are reference cards, not required steps.
 Chord detection is purely time-based: notes inside the gate window (default
 120 ms) form a gesture, and separate gestures type separate letters. That makes
 the instrument forgiving of rolled chords without ever swallowing a fast run.
+
+### Three banks, one keyboard
+
+The app uses the octaves a real piano already gives you. The screen keeps the
+same fifteen white keys and ten black keys, so nothing gets more crowded; the
+extra mappings live on keys your controller already has.
+
+| Bank | Where | What you get |
+|---|---|---|
+| **Main words** | C3–C5, the drawn keyboard | Six triads: `the and you that have with` |
+| **Low words** | C2–B2, below the drawn keyboard | The same six shapes: `of to in it for not` |
+| **Extra words** | Any octave, triads with a black key | Twelve sharp and minor triads: `this but from they will one about would there what when like` |
+| **Up bigrams** | Two notes, second higher | `th he in er an ing ed` |
+| **Down bigrams** | Two notes, second lower | `to of is it or on at` |
+| **High bigrams** | Two notes, both above C5 | `re en nd ti es te al ar st nt ng` |
+
+Direction is the trick for intervals: the same two keys are two different
+bigrams depending on which note you play second. The high bank is the only place
+a black key can start a two-note gesture, so it never fights the punctuation
+keys. Low-bank chords are recognised by their lowest note, which lets the
+F, G and A shapes reach up past C3 without losing their second meaning.
 
 ### On a computer keyboard
 
@@ -185,11 +210,12 @@ no font dependency on the OS.
 cargo test
 ```
 
-57 tests cover the parts that are easy to break: velocity buckets, layer
-precision, chord timing, interval and octave gestures, sustain gaps, quantize
-and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC
-routing and learning, settings round-trips and repair, MIDI byte parsing, and
-the demo script. The UI is verified by screenshot, not by unit test.
+63 tests cover the parts that are easy to break: velocity buckets, layer
+precision, chord timing, interval and octave gestures, every word and bigram
+bank, sustain gaps, quantize and candidate acceptance, WPM, undo/delete, profile
+scoring and remapping, CC routing and learning, settings round-trips and repair,
+MIDI byte parsing, and the demo script. The UI is verified by screenshot, not by
+unit test.
 
 ## Known rough edges
 

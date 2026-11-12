@@ -194,8 +194,9 @@ pub struct DemoStep {
     pub bytes: Vec<u8>,
 }
 
-/// A short scripted study: six word chords, a typo that quantizes, and an
-/// autocomplete accepted by aftertouch. Runs through the real MIDI parser.
+/// A short scripted study: a dozen word chords across three banks, a typo that
+/// quantizes, and an autocomplete accepted by aftertouch. Runs through the real
+/// MIDI parser.
 pub fn demo_script() -> Vec<DemoStep> {
     let mut raw: Vec<(u64, Vec<u8>)> = Vec::new();
     let triads: [[u8; 3]; 6] = [
@@ -233,6 +234,38 @@ pub fn demo_script() -> Vec<DemoStep> {
     raw.push((6_520, aftertouch(80)));
     raw.push((6_900, cc(11, 96))); // expression opens the gate
     raw.push((7_100, cc(64, 127))); // leave the pedal glowing
+
+    // The low bank: the same six pads below C3 type six more words.
+    let low_triads: [[u8; 3]; 3] = [
+        [36, 40, 43], // of
+        [38, 41, 45], // to
+        [40, 43, 47], // in
+    ];
+    let mut at = 7_300u64;
+    for triad in low_triads {
+        for (i, n) in triad.iter().enumerate() {
+            let start = at + i as u64 * 12;
+            raw.push((start, note_on(*n, 92)));
+            raw.push((start + 160, note_off(*n)));
+        }
+        at += 640;
+    }
+
+    // Extra triads use a black key: this, but, from.
+    let extra_triads: [[u8; 3]; 3] = [
+        [61, 65, 68], // this
+        [62, 66, 69], // but
+        [63, 67, 70], // from
+    ];
+    for triad in extra_triads {
+        for (i, n) in triad.iter().enumerate() {
+            let start = at + i as u64 * 12;
+            raw.push((start, note_on(*n, 94)));
+            raw.push((start + 160, note_off(*n)));
+        }
+        at += 640;
+    }
+    raw.push((at, cc(64, 0))); // settle the pedal after the last word
 
     raw.sort_by_key(|(at, _)| *at);
     raw.into_iter()
@@ -342,8 +375,10 @@ mod tests {
         let text = engine.text();
         assert!(text.contains("the and you that have with"), "{text}");
         assert!(text.contains("the hello"), "{text}");
+        assert!(text.contains("of to in"), "{text}");
+        assert!(text.contains("this but from"), "{text}");
         assert!(engine.corrections >= 1);
-        assert!(engine.chords_played >= 6);
+        assert!(engine.chords_played >= 12);
     }
 
     #[test]

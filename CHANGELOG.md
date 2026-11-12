@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.0 — 2026-11-12
+
+More words, more bigrams, same keyboard.
+
+**Added**
+- Twelve more word chords on sharp and minor triads:
+  `this but from they will one about would there what when like`.
+- A low word bank: the same six triad shapes below C3 type
+  `of to in it for not`, so a 49-key controller covers twelve words.
+- Directional bigrams: the seven core intervals now type a second word when the
+  second note is lower — `to of is it or on at`.
+- Eleven high-octave bigrams above C5 — `re en nd ti es te al ar st nt ng` —
+  which also unlocks the intervals the main table skips.
+- The gesture sheet is grouped into banks: main chords, low octave, extra
+  triads, up intervals, down intervals, high octave.
+- The status line reports the full count (`24 WORDS · 25 BIGRAMS`) and the deck
+  hint points at the low and high banks.
+- The simulated performance plays all three word banks.
+- 63 tests, including uniqueness across every chord and coverage of every bank.
+
+**Changed**
+- Chord detection now identifies low-bank words by their lowest note, which lets
+  the F, G and A shapes cross C3 without being mistaken for the main bank.
+
 ## 0.3.1 — 2026-11-12
 
 The small things that make it feel finished.
