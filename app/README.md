@@ -54,12 +54,12 @@ Learn) are reference cards, not required steps.
 | Region | What it does |
 |---|---|
 | **Toolbar** | Layer switch (`abc / ABC / 123`), live CC lights, profile picker, MIDI status, demo, shortcuts. |
-| **Overlays** | **Tab** — the Huffman map. **?** — gestures and shortcuts. **⌘,** — MIDI Learn. |
+| **Overlays** | **Tab** — the Huffman map. **?** — gestures, click any tile to play it. **⌘,** — MIDI Learn and input device. |
 | **Score** | The transcript, a 20-note staff, and the right rail: NOW (note / interval / chord), WPM and a wheel history. Hover any key or pad to reveal numbers in the rail. |
 | **Chord pads** | Six triads — `the and you that have with` — each showing its three keys and its share of English. Click or play them. |
 | **Keyboard** | Fifteen white keys (Huffman letters) and ten black keys (punctuation), with heat strips, live held-note rings and per-key velocity. The drawn two octaves are the main bank; the rest of your controller reaches the low and high banks. |
-| **Deck** | Sustain / soft / sostenuto pedals, a 40–240 ms gate slider, mod-wheel scrubber and base velocity. |
-| **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, live word / character / fix counts and profile quality. |
+| **Deck** | Sustain / soft / sostenuto pedals, a click-or-drag 40–240 ms gate with **TAP** tempo, mod-wheel scrubber and base velocity. |
+| **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, update badge, live word / character / fix counts and profile quality. |
 
 ## Playing it
 
@@ -123,6 +123,8 @@ F, G and A shapes reach up past C3 without losing their second meaning.
 | `Tab` | Toggle the map overlay |
 | `?` or `/` | Toggle the gesture reference |
 | `⌘D` | Start / stop the simulated performance |
+| `⌘P` | Start / stop practice |
+| `⌘U` | Check for updates / install one |
 | `⌘,` | Open / close MIDI Learn |
 | `⌘C` | Copy the transcript |
 | `⌘Z` | Undo the last edit |
@@ -131,6 +133,42 @@ F, G and A shapes reach up past C3 without losing their second meaning.
 
 Clicking a key plays it — click high for a soft note, low for a hard one. Pad
 and pedal clicks are the same messages the hardware sends.
+
+### Practice and audition
+
+The gesture sheet (**?**) is a playground, not a poster: every word tile and
+every dot ruler is clickable, and clicking one sends its notes through the same
+engine path as a piano. The keys light up, the transcript updates, and the
+correction rules apply — the quickest way to hear a mapping before you play it.
+
+**⌘P** turns the score header into a practice prompt. KeyChange picks a word or
+bigram, counts a streak, tracks the best streak and misses, and on a miss flashes
+the keys you needed. Only completed words and bigrams count; spelling letters
+doesn't break a run. Stop from the header or with **⌘P**.
+
+<img src="assets/screenshot-practice.png" alt="Practice mode in the score header with a target word, streak, best and misses" width="100%">
+
+### The gate
+
+The deck's gate is a real control. Click a point on the 40–240 ms track to jump
+there, drag across it to sweep, or press **TAP** three or more times: the median
+gap between taps becomes the window (half the tap interval, clamped to the same
+range). Expression CC11 still works and remains the MIDI-native way to set it.
+
+### MIDI devices and hot-plug
+
+Open **⌘,** to see the input picker: **AUTO** follows the first port, or click a
+device name to pin it. The choice is saved by name, so a keyboard that comes back
+on a different port still reconnects. A two-second poll notices a pulled cable or
+a newly connected keyboard and posts a toast; **SCAN ↻** does it immediately.
+
+### Updates
+
+**⌘U** asks GitHub Releases for the latest tag. When it is newer, a badge appears
+in the status bar (`↑ 0.5.0`); pressing **⌘U** again downloads the DMG, requires
+and verifies the published `.sha256`, mounts it, and either replaces a writable
+bundle and relaunches or opens the DMG in Finder. Only GitHub Releases is used,
+and a missing or mismatched checksum cancels the install.
 
 ## The small things it does for you
 
@@ -154,7 +192,8 @@ effort, and a live quality score. **Duplicate** clones the active layout into a
 custom profile; **Remap** swaps two white keys by clicking their columns. Score
 is `Σ frequency × effort`, so layouts can be compared against the optimum.
 
-Layouts, the active profile, layer, velocity, gate and learned CCs are saved to
+Layouts, the active profile, layer, velocity, gate, learned CCs and the pinned
+MIDI device are saved to
 `~/Library/Application Support/KeyChange/settings.json` (XDG paths on Linux) and
 restored on launch. A corrupt file is moved aside rather than blocking startup.
 
@@ -162,7 +201,10 @@ restored on launch. A corrupt file is moved aside rather than blocking startup.
 
 Open **⌘,**. Every control the app listens for is listed with its current CC:
 
-<img src="assets/screenshot-learn.png" alt="MIDI Learn panel listing sustain, soft, sostenuto, expression, mod wheel and panic with their CC numbers" width="100%">
+<img src="assets/screenshot-learn.png" alt="MIDI Learn panel listing the input device picker, sustain, soft, sostenuto, expression, mod wheel and panic with their CC numbers" width="100%">
+
+The top row is the input picker. **AUTO** follows the first connected port; a
+pinned name wins whenever it is present, even after a replug.
 
 | Control | Default | What it does |
 |---|---|---|
@@ -188,7 +230,10 @@ app/
 │   ├── engine.rs    Pure state machine: notes, gestures, layers, pedals,
 │   │                candidates, WPM, profiles, undo. No GPUI, no threads.
 │   ├── midi.rs      Raw byte parser, MidiHub with reconnecting hardware input,
-│   │                and the simulated player. Hardware and demo share a path.
+│   │                device-name pinning, hot-plug polling, and the simulated
+│   │                player. Hardware and demo share a path.
+│   ├── updater.rs   GitHub Releases check, checksum verification, DMG staging
+│   │                and the relaunch helper.
 │   └── ui.rs        The single-screen GPUI view, overlays and all interactions.
 ├── assets/          App icon (SVG + ICNS), fonts (OFL, licences included).
 ├── scripts/         bundle.sh, dmg.sh, make-icon.sh.
@@ -210,17 +255,21 @@ no font dependency on the OS.
 cargo test
 ```
 
-63 tests cover the parts that are easy to break: velocity buckets, layer
+64 tests cover the parts that are easy to break: velocity buckets, layer
 precision, chord timing, interval and octave gestures, every word and bigram
 bank, sustain gaps, quantize and candidate acceptance, WPM, undo/delete, profile
 scoring and remapping, CC routing and learning, settings round-trips and repair,
-MIDI byte parsing, and the demo script. The UI is verified by screenshot, not by
-unit test.
+MIDI byte parsing, update version ordering, and the demo script. The UI is
+verified by screenshot, not by unit test.
 
 ## Known rough edges
 
 - The macOS build is ad-hoc signed, not notarised. First launch needs
   right-click → **Open**.
+- Update checks need GitHub reachable. If KeyChange lives in a bundle you cannot
+  write to (often `/Applications`), the updater opens the verified DMG instead
+  of replacing it.
+- Practice covers words and bigrams, not single letters.
 - Linux and Windows builds are untested; the app currently targets macOS.
 - The simulation is a fixed script, not a generative player.
 - There is no per-key character picker yet — MIDI Learn reprograms controls,

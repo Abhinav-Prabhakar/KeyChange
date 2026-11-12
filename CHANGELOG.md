@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0 — 2026-11-12
+
+The instrument learns you back.
+
+**New**
+- **The gesture sheet plays.** Click any miniature keyboard or dot ruler and
+  the chord or bigram runs through the real engine, lighting the keys you would
+  have pressed. The fastest way to learn a mapping.
+- **Practice mode** (`⌘P`). A random word or bigram appears in the score header;
+  play it to build a streak. Misses count, flash the target keys, and the best
+  streak stays for the session. Stop from the header or with `⌘P`.
+- **A gate you can touch.** Click or drag the 40–240 ms track, or tap **TAP**
+  three times to derive the window from your own hands.
+- **MIDI input picker** in `⌘,`: AUTO plus every connected port, remembered by
+  name. Hot-plug is polled every couple of seconds, with a toast when a
+  keyboard arrives or a cable is pulled.
+- **Homebrew cask**: `brew install --cask Abhinav-Prabhakar/tap/keychange`.
+- **Built-in updater**: `⌘U` checks GitHub Releases, puts a version badge in the
+  status bar, downloads the DMG, verifies the published SHA-256, installs and
+  relaunches. If the app bundle is not writable, it opens the DMG instead of
+  touching anything.
+
+**Changed**
+- The status bar carries the update badge and the learned MIDI device.
+- The gesture footer now names click-to-play, practice and update.
+- Settings remember the pinned MIDI input.
+
 ## 0.4.1 — 2026-11-12
 
 The gesture sheet, redrawn.

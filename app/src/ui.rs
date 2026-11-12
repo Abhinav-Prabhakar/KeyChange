@@ -5,17 +5,19 @@ use std::time::{Duration, Instant};
 use gpui::prelude::*;
 use gpui::{
     div, point, px, rgb, rgba, AnyElement, BoxShadow, ClipboardItem, Context, DefiniteLength, Div,
-    FocusHandle, Focusable, FontWeight, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, Render,
-    SharedString, Window,
+    FocusHandle, Focusable, FontWeight, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton,
+    MouseMoveEvent, Render, SharedString, Window,
 };
 
 use crate::engine::{
-    chord_pads, freq_for, note_name, Control, Engine, KeyKind, Layer, Pedal, BIGRAM_COUNT,
-    BLACK_MIDI, BLACK_SLOTS, DEFAULT_LETTERS, EXTRA_TRIADS, INTERVALS, INTERVALS_DOWN,
-    INTERVALS_HIGH, WHITE_MIDI, WORDS, WORDS_LOW, WORD_CHORD_COUNT, WORD_TRIADS,
+    chord_pads, freq_for, key_for_note, note_name, Control, Engine, Gesture, KeyKind, Layer,
+    NoteOutcome, Pedal, BIGRAM_COUNT, BLACK_MIDI, BLACK_SLOTS, DEFAULT_LETTERS, EXTRA_TRIADS,
+    INTERVALS, INTERVALS_DOWN, INTERVALS_HIGH, WHITE_MIDI, WORDS, WORDS_LOW, WORD_CHORD_COUNT,
+    WORD_TRIADS,
 };
-use crate::midi::{self, MidiHub, MidiMsg, MidiStatus, Packet, Source};
+use crate::midi::{self, MidiEvent, MidiHub, MidiMsg, MidiStatus, Packet, Source};
 use crate::settings::Settings;
+use crate::updater::{self, Release};
 
 // ─────────────────────────────────── palette ───────────────────────────────
 
@@ -111,6 +113,123 @@ fn caps(text: impl Into<SharedString>, size: f32) -> Div {
     mono(size).child(text.into())
 }
 
+// ───────────────────────────── gesture playground ──────────────────────────
+
+const PRACTICE_COUNT: usize = WORD_CHORD_COUNT + BIGRAM_COUNT;
+
+/// The MIDI notes behind a tile, so clicking a glyph is a real performance.
+fn word_notes(index: usize) -> Vec<u8> {
+    if index < WORDS.len() {
+        chord_pads()[index].notes.to_vec()
+    } else if index < WORDS.len() + WORDS_LOW.len() {
+        chord_pads()[index - WORDS.len()]
+            .notes
+            .iter()
+            .map(|note| note.saturating_sub(12))
+            .collect()
+    } else {
+        extra_notes(EXTRA_TRIADS[(index - WORDS.len() - WORDS_LOW.len()).min(11)].0)
+    }
+}
+
+fn extra_notes(pcs: [i32; 3]) -> Vec<u8> {
+    let root = pcs[0];
+    pcs.iter()
+        .map(|pc| (60 + root + (pc - root).rem_euclid(12)) as u8)
+        .collect()
+}
+
+/// Find two white keys exactly `semi` apart. The main bigram banks are
+/// white-key gestures, so intervals like a minor second use B→C rather than a
+/// black key that the engine reserves for punctuation.
+fn white_pair(semi: i32) -> [u8; 2] {
+    for (i, low) in WHITE_MIDI.iter().enumerate() {
+        for high in WHITE_MIDI.iter().skip(i + 1) {
+            if *high as i32 - *low as i32 == semi {
+                return [*low, *high];
+            }
+        }
+    }
+    [60, 60]
+}
+
+fn practice_target(index: usize) -> PracticeTarget {
+    let index = index % PRACTICE_COUNT;
+    let main = WORDS.len();
+    let low = WORDS_LOW.len();
+    if index < main {
+        PracticeTarget::Word(WORDS[index])
+    } else if index < main + low {
+        PracticeTarget::Word(WORDS_LOW[index - main])
+    } else if index < WORD_CHORD_COUNT {
+        PracticeTarget::Word(EXTRA_TRIADS[index - main - low].2)
+    } else {
+        let i = index - WORD_CHORD_COUNT;
+        if i < INTERVALS.len() {
+            PracticeTarget::Up(INTERVALS[i].1)
+        } else if i < INTERVALS.len() + INTERVALS_DOWN.len() {
+            PracticeTarget::Down(INTERVALS_DOWN[i - INTERVALS.len()].1)
+        } else {
+            PracticeTarget::High(INTERVALS_HIGH[i - INTERVALS.len() - INTERVALS_DOWN.len()].1)
+        }
+    }
+}
+
+fn practice_notes(target: PracticeTarget) -> Vec<u8> {
+    match target {
+        PracticeTarget::Word(word) => {
+            let index = WORDS
+                .iter()
+                .position(|candidate| *candidate == word)
+                .or_else(|| {
+                    WORDS_LOW
+                        .iter()
+                        .position(|candidate| *candidate == word)
+                        .map(|i| i + WORDS.len())
+                })
+                .or_else(|| {
+                    EXTRA_TRIADS
+                        .iter()
+                        .position(|(_, _, candidate)| *candidate == word)
+                        .map(|i| i + WORDS.len() + WORDS_LOW.len())
+                })
+                .unwrap_or(0);
+            word_notes(index)
+        }
+        PracticeTarget::Up(bigram) => {
+            let semi = INTERVALS
+                .iter()
+                .chain(INTERVALS_HIGH.iter())
+                .find(|(_, text)| *text == bigram)
+                .map(|(semi, _)| *semi)
+                .unwrap_or(1);
+            if INTERVALS.iter().any(|(_, text)| *text == bigram) {
+                let [low, high] = white_pair(semi);
+                vec![low, high]
+            } else {
+                vec![74, (74 + semi) as u8]
+            }
+        }
+        PracticeTarget::Down(bigram) => {
+            let semi = INTERVALS_DOWN
+                .iter()
+                .find(|(_, text)| *text == bigram)
+                .map(|(semi, _)| *semi)
+                .unwrap_or(1);
+            let [low, high] = white_pair(semi);
+            vec![high, low]
+        }
+        PracticeTarget::High(bigram) => {
+            let semi = INTERVALS_HIGH
+                .iter()
+                .find(|(_, text)| *text == bigram)
+                .map(|(semi, _)| *semi)
+                .unwrap_or(1);
+            vec![74, (74 + semi) as u8]
+        }
+    }
+}
+
 // ─────────────────────────────────── state ─────────────────────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,8 +269,54 @@ struct Notice {
 struct Pulse {
     seq: u64,
     at: u64,
-    target: Option<KeyKind>,
+    targets: Vec<KeyKind>,
     pedal: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PracticeTarget {
+    Word(&'static str),
+    Up(&'static str),
+    Down(&'static str),
+    High(&'static str),
+}
+
+impl PracticeTarget {
+    fn text(self) -> &'static str {
+        match self {
+            PracticeTarget::Word(word) => word,
+            PracticeTarget::Up(bigram)
+            | PracticeTarget::Down(bigram)
+            | PracticeTarget::High(bigram) => bigram,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            PracticeTarget::Word(_) => "WORD",
+            PracticeTarget::Up(_) => "BIGRAM · SECOND NOTE HIGHER",
+            PracticeTarget::Down(_) => "BIGRAM · SECOND NOTE LOWER",
+            PracticeTarget::High(_) => "BIGRAM · ABOVE C5",
+        }
+    }
+}
+
+struct Practice {
+    target: PracticeTarget,
+    streak: u32,
+    best: u32,
+    misses: u32,
+    rounds: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum UpdateState {
+    Idle,
+    Checking,
+    Available(Release),
+    Downloading(Release),
+    Installing,
+    Failed(String),
 }
 
 pub struct KeyChangeApp {
@@ -170,11 +335,23 @@ pub struct KeyChangeApp {
     caret_on: bool,
     learn: Option<Control>,
     last_midi: Option<String>,
+    midi_device: Option<String>,
+    practice: Option<Practice>,
+    taps: Vec<u64>,
+    update: UpdateState,
 }
 
 impl KeyChangeApp {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let hub = MidiHub::new();
+        let first_run = !Settings::exists();
+        let settings = Settings::load();
+        let midi_device = settings.midi_device.clone();
+        let mut engine = Engine::new();
+        settings.apply_to(&mut engine);
+        let mut hub = MidiHub::new();
+        if midi_device.is_some() {
+            hub.select(midi_device.clone());
+        }
         let rx = hub.rx.clone();
         cx.spawn(async move |this, cx| {
             while let Ok(packet) = rx.recv().await {
@@ -188,9 +365,6 @@ impl KeyChangeApp {
         })
         .detach();
         let now = Instant::now();
-        let first_run = !Settings::exists();
-        let mut engine = Engine::new();
-        Settings::load().apply_to(&mut engine);
         let mut app = Self {
             focus: cx.focus_handle(),
             engine,
@@ -204,7 +378,7 @@ impl KeyChangeApp {
             pulse: Pulse {
                 seq: 0,
                 at: 0,
-                target: None,
+                targets: Vec::new(),
                 pedal: None,
             },
             seq: 0,
@@ -212,6 +386,10 @@ impl KeyChangeApp {
             caret_on: true,
             learn: None,
             last_midi: None,
+            midi_device,
+            practice: None,
+            taps: Vec::new(),
+            update: UpdateState::Idle,
         };
         if first_run {
             app.set_notice(
@@ -235,6 +413,15 @@ impl KeyChangeApp {
             }
         })
         .detach();
+        // Hot-plug: a pulled cable or a newly connected keyboard should not
+        // require a restart. Two seconds is slow enough to cost nothing.
+        cx.spawn(async move |this, cx| loop {
+            smol::Timer::after(Duration::from_millis(2_100)).await;
+            if this.update(cx, |this, cx| this.poll_midi(cx)).is_err() {
+                break;
+            }
+        })
+        .detach();
         app
     }
 
@@ -245,7 +432,9 @@ impl KeyChangeApp {
     /// Write layouts, velocity, gate, layer and learned CCs. Failure is a
     /// notice, never an interruption.
     fn persist(&mut self) {
-        if let Err(err) = Settings::from_engine(&self.engine).save() {
+        let mut settings = Settings::from_engine(&self.engine);
+        settings.midi_device = self.midi_device.clone();
+        if let Err(err) = settings.save() {
             self.set_notice(format!("Settings not saved · {err}"), NoticeKind::Info);
         }
     }
@@ -306,9 +495,10 @@ impl KeyChangeApp {
                 if let Some(k) = outcome.key {
                     self.flash(k, None);
                 }
-                if let Some(c) = outcome.correction {
+                if let Some(c) = &outcome.correction {
                     self.set_notice(format!("{} → {}", c.from, c.to), NoticeKind::Good);
                 }
+                self.after_outcome(&outcome, cx);
             }
             Some(MidiMsg::NoteOff { note }) => self.engine.note_off(note),
             Some(MidiMsg::Control { cc, value }) => {
@@ -323,6 +513,7 @@ impl KeyChangeApp {
                     if let Some(k) = outcome.key {
                         self.flash(k, None);
                     }
+                    self.after_outcome(&outcome, cx);
                 }
             }
             Some(MidiMsg::Aftertouch { pressure }) => {
@@ -339,11 +530,18 @@ impl KeyChangeApp {
     }
 
     fn flash(&mut self, key: KeyKind, pedal: Option<usize>) {
+        self.flash_keys(vec![key], pedal);
+    }
+
+    fn flash_keys(&mut self, keys: Vec<KeyKind>, pedal: Option<usize>) {
+        if keys.is_empty() {
+            return;
+        }
         self.seq = self.seq.wrapping_add(1);
         self.pulse = Pulse {
             seq: self.seq,
             at: self.now(),
-            target: Some(key),
+            targets: keys,
             pedal,
         };
     }
@@ -382,17 +580,37 @@ impl KeyChangeApp {
         chord_pads().iter().position(|p| p.word == word)
     }
 
-    fn click_note(&mut self, note: u8, velocity: u8, key: KeyKind, cx: &mut Context<Self>) {
-        let now = self.now();
-        let outcome = self.engine.note_on(note, velocity, now);
-        if let Some(c) = outcome.correction {
-            self.set_notice(format!("{} → {}", c.from, c.to), NoticeKind::Good);
+    /// Audition notes through the real engine, exactly as a MIDI keyboard
+    /// would. The same path means chords, corrections, practice and the
+    /// transcript all behave identically whether you play or click.
+    fn play_notes(&mut self, notes: &[u8], velocity: u8, cx: &mut Context<Self>) {
+        if notes.is_empty() {
+            return;
         }
-        self.flash(key, None);
+        let now = self.now();
+        let mut touched = Vec::new();
+        let mut last = None;
+        for note in notes {
+            let outcome = self.engine.note_on(*note, velocity, now);
+            if let Some(k) = outcome.key {
+                touched.push(k);
+            }
+            if let Some(c) = &outcome.correction {
+                self.set_notice(format!("{} → {}", c.from, c.to), NoticeKind::Good);
+            }
+            last = Some(outcome);
+        }
+        self.flash_keys(touched, None);
+        if let Some(outcome) = last {
+            self.after_outcome(&outcome, cx);
+        }
+        let notes = notes.to_vec();
         cx.spawn(async move |this, cx| {
-            smol::Timer::after(Duration::from_millis(150)).await;
+            smol::Timer::after(Duration::from_millis(170)).await;
             this.update(cx, |this, cx| {
-                this.engine.note_off(note);
+                for note in notes {
+                    this.engine.note_off(note);
+                }
                 cx.notify();
             })
             .ok();
@@ -401,33 +619,293 @@ impl KeyChangeApp {
         cx.notify();
     }
 
+    fn click_note(&mut self, note: u8, velocity: u8, _key: KeyKind, cx: &mut Context<Self>) {
+        self.play_notes(&[note], velocity, cx);
+    }
+
     fn play_pad(&mut self, index: usize, cx: &mut Context<Self>) {
         let pads = chord_pads();
         let Some(pad) = pads.get(index) else { return };
-        let now = self.now();
         let notes = pad.notes;
-        for n in notes {
-            self.engine.note_on(n, self.engine.base_velocity, now);
+        let velocity = self.engine.base_velocity;
+        self.play_notes(&notes, velocity, cx);
+    }
+
+    // ── practice ────────────────────────────────────────────────────────────
+
+    fn toggle_practice(&mut self, cx: &mut Context<Self>) {
+        if let Some(done) = self.practice.take() {
+            self.seq = self.seq.wrapping_add(1);
+            self.set_notice(
+                format!(
+                    "Practice ended · best streak {} · {} rounds",
+                    done.best, done.rounds
+                ),
+                NoticeKind::Info,
+            );
+        } else {
+            self.overlay = None;
+            let target = self.next_practice_target();
+            self.practice = Some(Practice {
+                target,
+                streak: 0,
+                best: 0,
+                misses: 0,
+                rounds: 0,
+            });
+            self.set_notice(
+                format!("Practice · play “{}”", target.text()),
+                NoticeKind::Good,
+            );
         }
+        cx.notify();
+    }
+
+    fn next_practice_target(&mut self) -> PracticeTarget {
+        const COUNT: usize = WORD_CHORD_COUNT + BIGRAM_COUNT;
         self.seq = self.seq.wrapping_add(1);
-        self.pulse = Pulse {
-            seq: self.seq,
-            at: now,
-            target: None,
-            pedal: None,
+        let mut x = self
+            .seq
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        x ^= self.now().rotate_left(23);
+        practice_target((x >> 33) as usize % COUNT)
+    }
+
+    /// Called after every note. Only completed words and bigrams count, so
+    /// spelling a chord letter by letter does not break a streak.
+    fn after_outcome(&mut self, outcome: &NoteOutcome, cx: &mut Context<Self>) {
+        if self.practice.is_none() || outcome.resolved.is_none() {
+            return;
+        }
+        let hit = match (self.practice.as_ref().map(|p| p.target), &outcome.gesture) {
+            (Some(PracticeTarget::Word(want)), Gesture::Word(got)) => want == *got,
+            (Some(PracticeTarget::Up(want)), Gesture::Interval(got))
+            | (Some(PracticeTarget::Down(want)), Gesture::Interval(got))
+            | (Some(PracticeTarget::High(want)), Gesture::Interval(got)) => want == *got,
+            _ => false,
         };
+        match &outcome.gesture {
+            Gesture::Word(_) | Gesture::Interval(_) => {}
+            _ => return,
+        }
+        let Some(practice) = self.practice.as_mut() else {
+            return;
+        };
+        if hit {
+            practice.streak = practice.streak.saturating_add(1);
+            practice.best = practice.best.max(practice.streak);
+            practice.rounds = practice.rounds.saturating_add(1);
+            let streak = practice.streak;
+            let target = self.next_practice_target();
+            if let Some(practice) = self.practice.as_mut() {
+                practice.target = target;
+            }
+            self.set_notice(
+                format!(
+                    "✓ {} · {streak} in a row",
+                    outcome.resolved.as_deref().unwrap_or("")
+                ),
+                NoticeKind::Good,
+            );
+        } else {
+            practice.misses = practice.misses.saturating_add(1);
+            practice.streak = 0;
+            let target = practice.target;
+            let keys = practice_notes(target)
+                .into_iter()
+                .filter_map(key_for_note)
+                .collect();
+            self.flash_keys(keys, None);
+            self.set_notice(format!("Miss · play “{}”", target.text()), NoticeKind::Info);
+        }
+        cx.notify();
+    }
+
+    // ── gate ────────────────────────────────────────────────────────────────
+
+    fn set_gate(&mut self, ms: u64, cx: &mut Context<Self>) {
+        let next = ms.clamp(40, 240);
+        if next != self.engine.timing_ms {
+            self.engine.set_timing(next);
+            self.persist();
+            self.set_notice(format!("Gate {next} ms"), NoticeKind::Info);
+        }
+        cx.notify();
+    }
+
+    fn tap_gate(&mut self, cx: &mut Context<Self>) {
+        let now = self.now();
+        if let Some(last) = self.taps.last() {
+            if now.saturating_sub(*last) > 1_600 {
+                self.taps.clear();
+            }
+        }
+        self.taps.push(now);
+        if self.taps.len() > 6 {
+            self.taps.remove(0);
+        }
+        if self.taps.len() < 2 {
+            self.set_notice("Tap again · set the gate from your hands", NoticeKind::Info);
+            cx.notify();
+            return;
+        }
+        let gaps: Vec<u64> = self
+            .taps
+            .windows(2)
+            .map(|pair| pair[1].saturating_sub(pair[0]))
+            .filter(|gap| *gap > 0)
+            .collect();
+        if gaps.is_empty() {
+            cx.notify();
+            return;
+        }
+        let average = gaps.iter().sum::<u64>() / gaps.len() as u64;
+        let ms = ((average as f32 * 0.5) as u64).clamp(40, 240);
+        self.engine.set_timing(ms);
+        self.persist();
+        self.set_notice(
+            format!("Tap tempo · {} taps · gate {ms} ms", self.taps.len()),
+            NoticeKind::Good,
+        );
+        cx.notify();
+    }
+
+    // ── MIDI devices ────────────────────────────────────────────────────────
+
+    fn poll_midi(&mut self, cx: &mut Context<Self>) {
+        let Some(event) = self.hub.poll() else {
+            return;
+        };
+        match event {
+            MidiEvent::Connected => {
+                if let MidiStatus::Connected(name) = &self.hub.status {
+                    self.set_notice(format!("MIDI connected · {name}"), NoticeKind::Good);
+                }
+            }
+            MidiEvent::Disconnected => {
+                self.set_notice("MIDI disconnected · waiting for it", NoticeKind::Info);
+            }
+            MidiEvent::DevicesChanged => {
+                cx.notify();
+            }
+        }
+        cx.notify();
+    }
+
+    fn choose_midi(&mut self, name: Option<String>, cx: &mut Context<Self>) {
+        self.midi_device = name.clone();
+        self.hub.select(name);
+        self.persist();
+        match &self.hub.status {
+            MidiStatus::Connected(device) => {
+                self.set_notice(format!("Listening to {device}"), NoticeKind::Good)
+            }
+            MidiStatus::Error(err) => {
+                self.set_notice(format!("MIDI error · {err}"), NoticeKind::Info)
+            }
+            MidiStatus::NoDevice => self.set_notice(
+                "Device saved · plug it in and it connects",
+                NoticeKind::Info,
+            ),
+        }
+        cx.notify();
+    }
+
+    // ── updates ─────────────────────────────────────────────────────────────
+
+    fn check_update(&mut self, cx: &mut Context<Self>) {
+        if matches!(
+            self.update,
+            UpdateState::Checking | UpdateState::Downloading(_) | UpdateState::Installing
+        ) {
+            return;
+        }
+        self.update = UpdateState::Checking;
+        self.set_notice("Checking for updates…", NoticeKind::Info);
+        cx.notify();
         cx.spawn(async move |this, cx| {
-            smol::Timer::after(Duration::from_millis(170)).await;
+            let result = smol::unblock(updater::check).await;
             this.update(cx, |this, cx| {
-                for n in notes {
-                    this.engine.note_off(n);
+                match result {
+                    Ok(Some(release)) => {
+                        this.set_notice(
+                            format!("{} is ready · ⌘U installs it", release.version),
+                            NoticeKind::Good,
+                        );
+                        this.update = UpdateState::Available(release);
+                    }
+                    Ok(None) => {
+                        this.set_notice(
+                            format!("Latest build · {}", updater::current()),
+                            NoticeKind::Good,
+                        );
+                        this.update = UpdateState::Idle;
+                    }
+                    Err(err) => {
+                        this.set_notice(format!("Update check failed · {err}"), NoticeKind::Info);
+                        this.update = UpdateState::Failed(err);
+                    }
                 }
                 cx.notify();
             })
             .ok();
         })
         .detach();
+    }
+
+    fn install_update(&mut self, cx: &mut Context<Self>) {
+        let UpdateState::Available(release) = self.update.clone() else {
+            self.check_update(cx);
+            return;
+        };
+        self.update = UpdateState::Downloading(release.clone());
+        self.set_notice(
+            format!("Downloading {} · verified before install", release.version),
+            NoticeKind::Info,
+        );
         cx.notify();
+        cx.spawn(async move |this, cx| {
+            let release_for_download = release.clone();
+            let result = smol::unblock(move || updater::download(&release_for_download)).await;
+            this.update(cx, |this, cx| match result {
+                Ok(staged) => {
+                    this.update = UpdateState::Installing;
+                    this.set_notice("Verified · installing and relaunching", NoticeKind::Good);
+                    cx.notify();
+                    cx.spawn(async move |this, cx| {
+                        let result = smol::unblock(move || updater::install(&staged)).await;
+                        this.update(cx, |this, cx| match result {
+                            Ok(true) => {
+                                cx.quit();
+                            }
+                            Ok(false) => {
+                                this.update = UpdateState::Idle;
+                                this.set_notice(
+                                    "Installer opened · drag KeyChange to Applications",
+                                    NoticeKind::Info,
+                                );
+                                cx.notify();
+                            }
+                            Err(err) => {
+                                this.update = UpdateState::Failed(err.clone());
+                                this.set_notice(format!("Update failed · {err}"), NoticeKind::Info);
+                                cx.notify();
+                            }
+                        })
+                        .ok();
+                    })
+                    .detach();
+                }
+                Err(err) => {
+                    this.update = UpdateState::Failed(err.clone());
+                    this.set_notice(format!("Update failed · {err}"), NoticeKind::Info);
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
     }
 
     fn on_keystroke(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
@@ -438,6 +916,15 @@ impl KeyChangeApp {
         if command {
             match key {
                 "d" => self.toggle_demo(),
+                "p" => self.toggle_practice(cx),
+                "u" => {
+                    if matches!(self.update, UpdateState::Available(_)) {
+                        self.install_update(cx);
+                    } else {
+                        self.check_update(cx);
+                    }
+                    return;
+                }
                 "z" => {
                     self.engine.undo();
                 }
@@ -518,9 +1005,10 @@ impl KeyChangeApp {
                     if let Some(k) = outcome.key {
                         self.flash(k, None);
                     }
-                    if let Some(c) = outcome.correction {
+                    if let Some(c) = &outcome.correction {
                         self.set_notice(format!("{} → {}", c.from, c.to), NoticeKind::Good);
                     }
+                    self.after_outcome(&outcome, cx);
                 }
             }
         }
@@ -910,20 +1398,71 @@ impl KeyChangeApp {
         let active_candidate = self.engine.candidate_index();
         let recent: Vec<_> = self.engine.recent.iter().cloned().collect();
 
-        div()
-            .flex_1()
-            .min_h(px(250.))
-            .rounded(px(16.))
-            .bg(card())
-            .border_1()
-            .border_color(hair())
-            .shadow(soft_shadow())
-            .p(px(20.))
-            .flex()
-            .flex_col()
-            .gap(px(10.))
-            // score header
-            .child(
+        let header =
+            if let Some(practice) = &self.practice {
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(9.))
+                            .child(div().size(px(5.)).rounded_full().bg(yellow()))
+                            .child(caps("PRACTICE", 8.5).text_color(ink_soft()))
+                            .child(
+                                div()
+                                    .font_family(SERIF)
+                                    .italic()
+                                    .text_size(px(20.))
+                                    .text_color(ink())
+                                    .child(practice.target.text()),
+                            )
+                            .child(mono(7.5).text_color(faint()).child(practice.target.label())),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(9.))
+                            .child(
+                                mono(8.5)
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(ink())
+                                    .child(format!("STREAK {}", practice.streak)),
+                            )
+                            .child(mono(8.5).text_color(faint()).child(format!(
+                                "BEST {} · MISS {}",
+                                practice.best, practice.misses
+                            )))
+                            .child(
+                                div()
+                                    .id("practice-stop")
+                                    .px(px(8.))
+                                    .py(px(3.))
+                                    .rounded(px(5.))
+                                    .border_1()
+                                    .border_color(hair())
+                                    .bg(card())
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(card_warm()))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| this.toggle_practice(cx)),
+                                    )
+                                    .child(
+                                        mono(8.)
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(muted())
+                                            .child("⌘P STOP"),
+                                    ),
+                            ),
+                    )
+            } else {
                 div()
                     .flex()
                     .flex_row()
@@ -951,8 +1490,23 @@ impl KeyChangeApp {
                     )
                     .child(mono(8.5).text_color(faint()).child(format!(
                         "C3 — C5  ·  {WORD_CHORD_COUNT} WORDS  ·  {BIGRAM_COUNT} BIGRAMS"
-                    ))),
-            )
+                    )))
+            };
+
+        div()
+            .flex_1()
+            .min_h(px(250.))
+            .rounded(px(16.))
+            .bg(card())
+            .border_1()
+            .border_color(hair())
+            .shadow(soft_shadow())
+            .p(px(20.))
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            // score header
+            .child(header)
             // body: transcript + rail
             .child(
                 div()
@@ -1468,7 +2022,7 @@ impl KeyChangeApp {
             let glyph = self.engine.preview_white(i);
             let heat = self.engine.white_heat(i);
             let held = held_white[i] || self.engine.held.contains(&WHITE_MIDI[i]);
-            let pulse = self.pulse.target == Some(KeyKind::White(i))
+            let pulse = self.pulse.targets.contains(&KeyKind::White(i))
                 && self.pulse_alive(self.pulse.seq, 210);
             let in_chord = hover_keys.contains(&i);
             let bg = if held || pulse {
@@ -1574,7 +2128,7 @@ impl KeyChangeApp {
             if let Some(b) = BLACK_SLOTS.iter().position(|s| *s == i) {
                 let glyph = self.engine.preview_black(b);
                 let held = held_black[b] || self.engine.held.contains(&BLACK_MIDI[b]);
-                let pulse = self.pulse.target == Some(KeyKind::Black(b))
+                let pulse = self.pulse.targets.contains(&KeyKind::Black(b))
                     && self.pulse_alive(self.pulse.seq, 210);
                 slot = slot.child(
                     div()
@@ -1858,7 +2412,7 @@ impl KeyChangeApp {
                             this.set_hover(
                                 Some(Hover::Gate),
                                 Some(format!(
-                                    "Gate — notes within {} ms make a chord",
+                                    "Gate — click or drag; notes within {} ms make a chord · TAP to set it from your hands",
                                     this.engine.timing_ms
                                 )),
                             );
@@ -1933,9 +2487,65 @@ impl KeyChangeApp {
                                             .right(px(6.))
                                             .h(px(1.))
                                             .bg(op(yellow(), 0.55)),
+                                    )
+                                    // Click or drag: twenty-one invisible cells
+                                    // map straight onto 40–240 ms in 10 ms steps.
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top(px(0.))
+                                            .left(px(0.))
+                                            .size_full()
+                                            .flex()
+                                            .flex_row()
+                                            .children((0..=20).map(|i| {
+                                                div()
+                                                    .flex_1()
+                                                    .h_full()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(move |this, _, _, cx| {
+                                                            this.set_gate(40 + i as u64 * 10, cx);
+                                                        }),
+                                                    )
+                                                    .on_mouse_move(cx.listener(
+                                                        move |this, ev: &MouseMoveEvent, _, cx| {
+                                                            if ev.pressed_button
+                                                                == Some(MouseButton::Left)
+                                                            {
+                                                                this.set_gate(40 + i as u64 * 10, cx);
+                                                            }
+                                                        },
+                                                    ))
+                                            })),
                                     ),
                             )
-                            .child(gate_btn(1, cx)),
+                            .child(gate_btn(1, cx))
+                            .child(
+                                div()
+                                    .id("gate-tap")
+                                    .w(px(34.))
+                                    .h(px(24.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(5.))
+                                    .border_1()
+                                    .border_color(hair())
+                                    .bg(card())
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(card_warm()).border_color(ink()))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| this.tap_gate(cx)),
+                                    )
+                                    .child(
+                                        mono(7.5)
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(ink())
+                                            .child("TAP"),
+                                    ),
+                            ),
                     ),
             )
             .child(div().w(px(1.)).h(px(34.)).bg(hair()))
@@ -2034,11 +2644,19 @@ impl KeyChangeApp {
 
     // ── status ──────────────────────────────────────────────────────────────
 
-    fn status(&self) -> Div {
+    fn status(&self, cx: &mut Context<Self>) -> Div {
         let text = self.engine.text();
         let words = text.split_whitespace().count();
         let chars = text.chars().filter(|c| !c.is_whitespace()).count();
         let fixes = self.engine.corrections;
+        let update_chip: Option<(String, bool)> = match &self.update {
+            UpdateState::Idle => None,
+            UpdateState::Checking => Some(("CHECKING…".to_string(), false)),
+            UpdateState::Available(release) => Some((format!("↑ {}", release.version), true)),
+            UpdateState::Downloading(_) => Some(("DOWNLOADING…".to_string(), false)),
+            UpdateState::Installing => Some(("INSTALLING…".to_string(), false)),
+            UpdateState::Failed(_) => Some(("UPDATE FAILED".to_string(), false)),
+        };
         let stats = if text.trim().is_empty() {
             String::new()
         } else {
@@ -2111,6 +2729,36 @@ impl KeyChangeApp {
                                 .text_color(faint())
                                 .child(stats)
                                 .child(div().w(px(1.)).h(px(10.)).bg(hair())),
+                        )
+                    })
+                    .when_some(update_chip, |el, (label, ready)| {
+                        el.child(
+                            div()
+                                .id("update-chip")
+                                .px(px(7.))
+                                .py(px(2.))
+                                .rounded(px(4.))
+                                .border_1()
+                                .border_color(if ready { ink() } else { hair() })
+                                .bg(if ready { yellow() } else { card() })
+                                .cursor_pointer()
+                                .hover(|s| s.bg(card_warm()))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(move |this, _, _, cx| {
+                                        if ready {
+                                            this.install_update(cx);
+                                        } else {
+                                            this.check_update(cx);
+                                        }
+                                    }),
+                                )
+                                .child(
+                                    mono(8.)
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(ink())
+                                        .child(label),
+                                ),
                         )
                     })
                     .child(
@@ -2234,7 +2882,7 @@ impl KeyChangeApp {
 
         let body = match tab {
             OverlayTab::Map => self.map_body(cx),
-            OverlayTab::Gestures => self.gestures_body(),
+            OverlayTab::Gestures => self.gestures_body(cx),
             OverlayTab::Learn => self.learn_body(cx),
         };
 
@@ -2575,6 +3223,94 @@ impl KeyChangeApp {
     }
 
     fn learn_body(&self, cx: &mut Context<Self>) -> Div {
+        let device_chip = |name: Option<String>,
+                           label: String,
+                           active: bool,
+                           detected: bool,
+                           cx: &mut Context<Self>| {
+            let pick = name.clone();
+            div()
+                .px(px(9.))
+                .py(px(4.))
+                .rounded_full()
+                .border_1()
+                .border_color(if active { ink() } else { hair() })
+                .bg(if active { yellow() } else { card() })
+                .cursor_pointer()
+                .hover(|s| s.bg(card_warm()))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| this.choose_midi(pick.clone(), cx)),
+                )
+                .child(
+                    div()
+                        .font_family(MONO)
+                        .font_weight(FontWeight::BOLD)
+                        .text_size(px(8.5))
+                        .text_color(ink())
+                        .child(label),
+                )
+                .when(detected, |el| {
+                    el.child(div().w(px(36.)).h(px(2.)).rounded_full().bg(if active {
+                        ink()
+                    } else {
+                        green()
+                    }))
+                })
+        };
+
+        let mut devices = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .items_center()
+            .gap(px(5.))
+            .child(device_chip(
+                None,
+                "AUTO".to_string(),
+                self.midi_device.is_none(),
+                self.hub.status.is_live(),
+                cx,
+            ));
+        for name in &self.hub.devices {
+            devices = devices.child(device_chip(
+                Some(name.clone()),
+                name.clone(),
+                self.midi_device.as_ref() == Some(name),
+                matches!(&self.hub.status, MidiStatus::Connected(device) if device == name),
+                cx,
+            ));
+        }
+        if self.hub.devices.is_empty() {
+            devices = devices.child(
+                mono(8.)
+                    .text_color(faint())
+                    .child("NO INPUTS · PLUG IN A KEYBOARD"),
+            );
+        }
+        devices = devices.child(
+            div()
+                .id("midi-scan")
+                .px(px(8.))
+                .py(px(4.))
+                .rounded(px(5.))
+                .border_1()
+                .border_color(hair())
+                .bg(card())
+                .cursor_pointer()
+                .hover(|s| s.bg(card_warm()))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| this.poll_midi(cx)),
+                )
+                .child(
+                    mono(8.)
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(ink())
+                        .child("SCAN ↻"),
+                ),
+        );
+
         let mut rows = div().flex().flex_col().gap(px(6.));
         for control in Control::ALL {
             let cc = control.get(&self.engine.cc_map);
@@ -2756,6 +3492,27 @@ impl KeyChangeApp {
                             .child("LEARNING A USED NUMBER SWAPS THE TWO CONTROLS"),
                     ),
             )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(5.))
+                    .pt(px(2.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(7.))
+                            .child(caps("INPUT", 8.).text_color(ink()))
+                            .child(
+                                mono(7.5)
+                                    .text_color(faint())
+                                    .child("PINNED BY NAME · HOT-PLUG SAFE"),
+                            ),
+                    )
+                    .child(devices),
+            )
             .child(rows)
             .child(
                 div()
@@ -2776,15 +3533,27 @@ impl KeyChangeApp {
             )
     }
 
-    fn gestures_body(&self) -> Div {
-        let word_tile = |pcs: [i32; 3], word: String| {
+    fn gestures_body(&self, cx: &mut Context<Self>) -> Div {
+        let word_tile = |pcs: [i32; 3], word: String, notes: Vec<u8>, cx: &mut Context<Self>| {
+            let click_notes = notes;
             div()
                 .w(px(96.))
                 .h(px(24.))
+                .px(px(3.))
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap(px(7.))
+                .rounded(px(5.))
+                .cursor_pointer()
+                .hover(|s| s.bg(side()))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        let velocity = this.engine.base_velocity;
+                        this.play_notes(&click_notes, velocity, cx);
+                    }),
+                )
                 .child(piano_glyph(pcs))
                 .child(
                     div()
@@ -2795,24 +3564,37 @@ impl KeyChangeApp {
                         .child(word),
                 )
         };
-        let interval_tile = |semi: i32, down: bool, text: String| {
-            div()
-                .w(px(148.))
-                .h(px(22.))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(9.))
-                .child(interval_glyph(semi, down))
-                .child(
-                    div()
-                        .font_family(MONO)
-                        .font_weight(FontWeight::BOLD)
-                        .text_size(px(9.))
-                        .text_color(ink())
-                        .child(text),
-                )
-        };
+        let interval_tile =
+            |semi: i32, down: bool, text: String, notes: Vec<u8>, cx: &mut Context<Self>| {
+                let click_notes = notes;
+                div()
+                    .w(px(148.))
+                    .h(px(22.))
+                    .px(px(3.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(9.))
+                    .rounded(px(5.))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(side()))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            let velocity = this.engine.base_velocity;
+                            this.play_notes(&click_notes, velocity, cx);
+                        }),
+                    )
+                    .child(interval_glyph(semi, down))
+                    .child(
+                        div()
+                            .font_family(MONO)
+                            .font_weight(FontWeight::BOLD)
+                            .text_size(px(9.))
+                            .text_color(ink())
+                            .child(text),
+                    )
+            };
         let group = |label: &'static str, grid: Div| {
             div()
                 .flex()
@@ -2835,27 +3617,62 @@ impl KeyChangeApp {
 
         let mut main = grid();
         for (i, word) in WORDS.iter().enumerate() {
-            main = main.child(word_tile(WORD_TRIADS[i], (*word).to_string()));
+            main = main.child(word_tile(
+                WORD_TRIADS[i],
+                (*word).to_string(),
+                word_notes(i),
+                cx,
+            ));
         }
         let mut low = grid();
         for (i, word) in WORDS_LOW.iter().enumerate() {
-            low = low.child(word_tile(WORD_TRIADS[i], (*word).to_string()));
+            low = low.child(word_tile(
+                WORD_TRIADS[i],
+                (*word).to_string(),
+                word_notes(WORDS.len() + i),
+                cx,
+            ));
         }
         let mut extra = grid();
-        for (pcs, _, word) in EXTRA_TRIADS {
-            extra = extra.child(word_tile(pcs, word.to_string()));
+        for (i, (pcs, _, word)) in EXTRA_TRIADS.iter().enumerate() {
+            extra = extra.child(word_tile(
+                *pcs,
+                word.to_string(),
+                word_notes(WORDS.len() + WORDS_LOW.len() + i),
+                cx,
+            ));
         }
         let mut up = grid();
         for (semi, text) in INTERVALS {
-            up = up.child(interval_tile(semi, false, text.to_string()));
+            let [low, high] = white_pair(semi);
+            up = up.child(interval_tile(
+                semi,
+                false,
+                text.to_string(),
+                vec![low, high],
+                cx,
+            ));
         }
         let mut down = grid();
         for (semi, text) in INTERVALS_DOWN {
-            down = down.child(interval_tile(semi, true, text.to_string()));
+            let [low, high] = white_pair(semi);
+            down = down.child(interval_tile(
+                semi,
+                true,
+                text.to_string(),
+                vec![high, low],
+                cx,
+            ));
         }
         let mut high = grid();
         for (semi, text) in INTERVALS_HIGH {
-            high = high.child(interval_tile(semi, false, text.to_string()));
+            high = high.child(interval_tile(
+                semi,
+                false,
+                text.to_string(),
+                vec![74, 74 + semi as u8],
+                cx,
+            ));
         }
 
         let pedal_chip = |icon: &'static str, label: &'static str| {
@@ -2892,6 +3709,15 @@ impl KeyChangeApp {
                         div()
                             .flex()
                             .flex_row()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(div().size(px(4.)).rounded_full().bg(yellow()))
+                            .child(caps("CLICK ANY TILE TO HEAR IT", 6.5).text_color(ink_soft())),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
                             .flex_wrap()
                             .items_center()
                             .gap(px(11.))
@@ -2899,10 +3725,12 @@ impl KeyChangeApp {
                             .children(
                                 [
                                     ("⌘D", "DEMO"),
+                                    ("⌘P", "PRACTICE"),
                                     ("⌘C", "COPY"),
                                     ("⌘Z", "UNDO"),
                                     ("⌘K", "CLEAR"),
                                     ("⌘,", "MIDI"),
+                                    ("⌘U", "UPDATE"),
                                     ("TAB", "MAP"),
                                     ("?", "HELP"),
                                 ]
@@ -3091,7 +3919,7 @@ impl Render for KeyChangeApp {
                     .child(self.keyboard(cx))
                     .child(self.deck(cx)),
             )
-            .child(self.status())
+            .child(self.status(cx))
             .when_some(overlay, |el, tab| el.child(self.overlay(tab, cx)))
     }
 }

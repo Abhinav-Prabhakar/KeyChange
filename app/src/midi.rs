@@ -38,8 +38,20 @@ impl MidiStatus {
     }
 }
 
+/// Something the UI should mention without polling every frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MidiEvent {
+    Connected,
+    Disconnected,
+    DevicesChanged,
+}
+
 pub struct MidiHub {
     pub status: MidiStatus,
+    /// Port names currently plugged in, in system order.
+    pub devices: Vec<String>,
+    /// `None` follows the first available port; `Some` pins a name.
+    pub selected: Option<String>,
     tx: Sender<Packet>,
     pub rx: Receiver<Packet>,
     conn: Option<MidiInputConnection<()>>,
@@ -52,18 +64,38 @@ impl MidiHub {
         let (tx, rx) = smol::channel::unbounded();
         let mut hub = Self {
             status: MidiStatus::NoDevice,
+            devices: Vec::new(),
+            selected: None,
             tx,
             rx,
             conn: None,
             demo: None,
             demo_running: false,
         };
-        hub.reconnect();
+        hub.select(None);
         hub
     }
 
-    pub fn reconnect(&mut self) {
+    /// Re-read the system ports. Connecting is separate so the caller can pick
+    /// a remembered device by name instead of blindly taking the first one.
+    pub fn refresh_devices(&mut self) {
+        self.devices = match MidiInput::new("KeyChange") {
+            Ok(input) => input
+                .ports()
+                .iter()
+                .filter_map(|port| input.port_name(port).ok())
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+    }
+
+    /// Open a port, or the first available one when `name` is `None`. Selecting
+    /// a device that is not plugged in leaves the hub waiting rather than
+    /// silently jumping to another keyboard.
+    pub fn select(&mut self, name: Option<String>) {
         self.conn = None;
+        self.selected = name;
+        self.refresh_devices();
         self.status = MidiStatus::NoDevice;
         let tx = self.tx.clone();
         let input = match MidiInput::new("KeyChange") {
@@ -74,12 +106,20 @@ impl MidiHub {
             }
         };
         let ports = input.ports();
-        let Some(port) = ports.first().cloned() else {
+        let wanted = self.selected.clone();
+        let chosen = ports.iter().find_map(|port| {
+            let port_name = input
+                .port_name(port)
+                .unwrap_or_else(|_| "MIDI keyboard".to_string());
+            if wanted.as_ref().is_none_or(|want| want == &port_name) {
+                Some((port.clone(), port_name))
+            } else {
+                None
+            }
+        });
+        let Some((port, name)) = chosen else {
             return;
         };
-        let name = input
-            .port_name(&port)
-            .unwrap_or_else(|_| "MIDI keyboard".to_string());
         match input.connect(
             &port,
             "keychange-in",
@@ -99,6 +139,39 @@ impl MidiHub {
                 self.status = MidiStatus::Error(err.to_string());
             }
         }
+    }
+
+    pub fn reconnect(&mut self) {
+        let selected = self.selected.clone();
+        self.select(selected);
+    }
+
+    /// Notice a cable pulled or a keyboard plugged in. Returns an event only
+    /// when the state actually changed, so the UI can show a toast once.
+    pub fn poll(&mut self) -> Option<MidiEvent> {
+        let before = self.devices.clone();
+        self.refresh_devices();
+        let changed = before != self.devices;
+        if let MidiStatus::Connected(name) = &self.status {
+            if !self.devices.iter().any(|device| device == name) {
+                self.conn = None;
+                self.status = MidiStatus::NoDevice;
+                return Some(MidiEvent::Disconnected);
+            }
+        } else if !self.devices.is_empty() {
+            let wanted = self.selected.clone();
+            if wanted
+                .as_ref()
+                .is_none_or(|want| self.devices.iter().any(|d| d == want))
+            {
+                let was_live = self.status.is_live();
+                self.reconnect();
+                if !was_live && self.status.is_live() {
+                    return Some(MidiEvent::Connected);
+                }
+            }
+        }
+        changed.then_some(MidiEvent::DevicesChanged)
     }
 
     pub fn start_demo(&mut self) {

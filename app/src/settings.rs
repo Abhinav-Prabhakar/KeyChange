@@ -24,6 +24,8 @@ pub struct Settings {
     pub timing_ms: u64,
     pub layer: Layer,
     pub cc_map: CcMap,
+    /// Pinned MIDI input name; `None` follows the first available port.
+    pub midi_device: Option<String>,
 }
 
 impl Default for Settings {
@@ -36,6 +38,7 @@ impl Default for Settings {
             timing_ms: 120,
             layer: Layer::Abc,
             cc_map: CcMap::default(),
+            midi_device: None,
         }
     }
 }
@@ -50,6 +53,7 @@ impl Settings {
             timing_ms: engine.timing_ms,
             layer: engine.layer,
             cc_map: engine.cc_map,
+            midi_device: None,
         }
     }
 

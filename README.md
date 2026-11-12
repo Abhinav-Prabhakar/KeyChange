@@ -41,6 +41,12 @@ It comes in two pieces: a **native macOS app** you can install in half a minute,
 3. Drag **KeyChange** into **Applications**.
 4. Launch it. On first open, **right-click the app → Open** (see below).
 
+Or let Homebrew do the same thing:
+
+```bash
+brew install --cask Abhinav-Prabhakar/tap/keychange
+```
+
 That's it. No installer wizard, no account, no background service. KeyChange is a single self-contained app that stores its settings in `~/Library/Application Support/KeyChange/`.
 
 ### About the first-launch warning
@@ -92,6 +98,14 @@ Press **Tab**. Every key shows its letter frequency and its physical effort, sco
 
 Press **?** for the cheat sheet: word chords, interval bigrams, and every shortcut in one card. Nothing to memorize, nothing to hunt for.
 
+### Practice, audition, and stay current
+
+<img src="app/assets/screenshot-practice.png" alt="Practice mode in the score header showing a target word, a streak, best streak, misses and a stop control" width="100%">
+
+Every tile in the gesture sheet is also a button: click a miniature keyboard or dot ruler and it plays that chord or bigram through the real engine, lighting the keys you would have pressed. Press **⌘P** when you want to be tested instead — KeyChange prompts a word or bigram, counts your streak, and flashes the right keys after a miss.
+
+Click or drag the gate to set the chord window, or tap **TAP** a few times and let your own hands choose it. **⌘U** checks GitHub Releases, shows a version badge in the status bar, downloads the DMG, verifies its published checksum, and relaunches into the new build.
+
 ### Teach it your pedals
 
 <img src="app/assets/screenshot-learn.png" alt="MIDI Learn panel with sustain, soft, sostenuto, expression, mod wheel and panic, each showing its CC number, a reset button and a Learn button" width="100%">
@@ -142,6 +156,8 @@ No piano? The app is fully playable from the laptop.
 | `Tab` | Open / close the map |
 | `?` | Open / close the gesture sheet |
 | `⌘,` | Open / close MIDI Learn |
+| `⌘P` | Start / stop practice |
+| `⌘U` | Check for updates / install one |
 | `⌘D` | Start / stop the simulated performance |
 | `⌘C` | Copy the transcript |
 | `⌘Z` | Undo |
@@ -247,7 +263,7 @@ cargo run          # development build
 make app           # KeyChange.app in app/dist/
 make dmg           # KeyChange-<version>.dmg in app/dist/
 make icon          # re-render assets/AppIcon.icns from icon.svg
-cargo test         # 63 tests
+cargo test         # 64 tests
 ```
 
 `cargo run` is the fastest loop. The bundle adds the app icon, the proper name in the menu bar, and a stable settings location. `KC_DEMO=1 cargo run` starts the simulated performance immediately.
@@ -264,7 +280,7 @@ python3 -m http.server 8099
 - **Rust + [GPUI](https://gpui.rs)** — the renderer behind Zed. One native window, no WebView, no Electron.
 - **[midir](https://github.com/Boddlnagg/midir)** — raw MIDI I/O with a reconnecting device hub.
 - **Serde + JSON** — settings in `~/Library/Application Support/KeyChange/settings.json` (XDG paths elsewhere), written atomically, with corrupt files moved aside instead of blocking launch.
-- **63 unit tests** — velocity buckets, chord timing, interval and octave gestures, sustain gaps, quantize and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC routing and learning, settings round-trips and repair, MIDI byte parsing and the demo script.
+- **64 unit tests** — velocity buckets, chord timing, interval and octave gestures, sustain gaps, quantize and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC routing and learning, settings round-trips and repair, MIDI byte parsing and the demo script.
 
 Read [`app/README.md`](app/README.md) for the architecture, the full gesture map and the design notes.
 
@@ -272,7 +288,7 @@ Read [`app/README.md`](app/README.md) for the architecture, the full gesture map
 
 ## Release notes
 
-Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.4.1**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
+Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.5.0**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
