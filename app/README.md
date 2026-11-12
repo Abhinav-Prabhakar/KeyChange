@@ -25,6 +25,13 @@ Apple Silicon.
 The build is ad-hoc signed but not notarised yet, so the first launch needs
 right-click → **Open** (or System Settings → Privacy & Security → **Open Anyway**).
 
+Or install with Homebrew:
+
+```bash
+brew trust Abhinav-Prabhakar/tap
+brew install --cask Abhinav-Prabhakar/tap/keychange
+```
+
 ### Build from source
 
 ```bash

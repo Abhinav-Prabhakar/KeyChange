@@ -44,8 +44,12 @@ It comes in two pieces: a **native macOS app** you can install in half a minute,
 Or let Homebrew do the same thing:
 
 ```bash
+brew trust Abhinav-Prabhakar/tap
 brew install --cask Abhinav-Prabhakar/tap/keychange
 ```
+
+Homebrew treats third-party taps as untrusted by default, so trust the tap once
+before installing from it.
 
 That's it. No installer wizard, no account, no background service. KeyChange is a single self-contained app that stores its settings in `~/Library/Application Support/KeyChange/`.
 

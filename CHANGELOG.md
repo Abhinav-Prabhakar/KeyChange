@@ -16,7 +16,8 @@ The instrument learns you back.
 - **MIDI input picker** in `⌘,`: AUTO plus every connected port, remembered by
   name. Hot-plug is polled every couple of seconds, with a toast when a
   keyboard arrives or a cable is pulled.
-- **Homebrew cask**: `brew install --cask Abhinav-Prabhakar/tap/keychange`.
+- **Homebrew cask**: `brew trust Abhinav-Prabhakar/tap` then
+  `brew install --cask Abhinav-Prabhakar/tap/keychange`.
 - **Built-in updater**: `⌘U` checks GitHub Releases, puts a version badge in the
   status bar, downloads the DMG, verifies the published SHA-256, installs and
   relaunches. If the app bundle is not writable, it opens the DMG instead of
