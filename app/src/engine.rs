@@ -18,6 +18,11 @@ pub const BLACK_SLOTS: [usize; 10] = [0, 1, 3, 4, 5, 7, 8, 10, 11, 12];
 /// The 10 black keys, C#3 → A#4.
 pub const BLACK_MIDI: [u8; 10] = [49, 51, 54, 56, 58, 61, 63, 66, 68, 70];
 
+/// Punctuation that hugs the word before it instead of starting a new one.
+pub fn is_tight_punctuation(ch: char) -> bool {
+    matches!(ch, ',' | '.' | ';' | ':' | '!' | '?' | '\u{2026}')
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyKind {
     White(usize),
@@ -362,6 +367,17 @@ impl Control {
         }
     }
 
+    pub fn default_cc(self) -> u8 {
+        match self {
+            Control::Wheel => 1,
+            Control::Gate => 11,
+            Control::Sustain => 64,
+            Control::Soft => 67,
+            Control::Sostenuto => 66,
+            Control::Panic => 123,
+        }
+    }
+
     pub fn get(self, map: &CcMap) -> u8 {
         match self {
             Control::Wheel => map.wheel,
@@ -417,6 +433,11 @@ impl CcMap {
         Control::ALL
             .into_iter()
             .find(|control| control.get(self) == (cc & 0x7F))
+    }
+
+    /// Put one control back on its spec number without disturbing the rest.
+    pub fn reset(&mut self, control: Control) {
+        self.assign(control, control.default_cc());
     }
 
     /// Point `control` at `cc`, moving any previous owner to the old number so
@@ -749,6 +770,12 @@ impl Engine {
         }
         self.held.insert(note);
 
+        let (glyph, kind, step) = match key {
+            Some(KeyKind::White(i)) => (self.typed_white(i, velocity), CharKind::Letter, Some(i)),
+            Some(KeyKind::Black(b)) => (self.preview_black(b), CharKind::Symbol, None),
+            None => (String::new(), CharKind::Letter, None),
+        };
+
         if self.session.is_none() {
             self.snapshot();
             let ends_space = self
@@ -760,18 +787,24 @@ impl Engine {
                 self.push_raw(' ', CharKind::Space, 70);
                 self.quantize_last_word(now);
             }
+            // "hello ," should become "hello," the moment the comma lands.
+            if matches!(key, Some(KeyKind::Black(_)))
+                && glyph
+                    .chars()
+                    .next()
+                    .map(is_tight_punctuation)
+                    .unwrap_or(false)
+            {
+                while self.cells.last().map(|c| c.ch == ' ').unwrap_or(false) {
+                    self.cells.pop();
+                }
+            }
             self.session = Some(Session {
                 start: self.cells.len(),
                 notes: Vec::new(),
                 last_at: now,
             });
         }
-
-        let (glyph, kind, step) = match key {
-            Some(KeyKind::White(i)) => (self.typed_white(i, velocity), CharKind::Letter, Some(i)),
-            Some(KeyKind::Black(b)) => (self.preview_black(b), CharKind::Symbol, None),
-            None => (String::new(), CharKind::Letter, None),
-        };
         if !glyph.is_empty() {
             for ch in glyph.chars() {
                 self.push_raw(ch, kind, velocity);
@@ -1852,6 +1885,16 @@ mod tests {
     }
 
     #[test]
+    fn resetting_one_control_restores_its_default_number() {
+        let mut map = CcMap::default();
+        map.assign(Control::Sustain, 1);
+        assert_eq!(map.sustain, 1);
+        map.reset(Control::Sustain);
+        assert_eq!(map.sustain, 64);
+        assert_eq!(map.wheel, 1);
+    }
+
+    #[test]
     fn learned_cc_reaches_the_engine() {
         let mut e = engine();
         e.cc_map.assign(Control::Sustain, 80);
@@ -1867,6 +1910,32 @@ mod tests {
         assert!(e.control(20, 127, 0).is_none());
         assert!(!e.sustain);
         assert!(!e.soft);
+    }
+
+    #[test]
+    fn punctuation_hugs_the_previous_word() {
+        let mut e = engine();
+        for (i, n) in [60u8, 48, 65, 65, 53].iter().enumerate() {
+            e.note_on(*n, 90, i as u64 * 200);
+            e.note_off(*n);
+        }
+        e.type_space(1_000);
+        assert_eq!(e.text(), "hello ");
+        e.note_on(BLACK_MIDI[0], 90, 1_400); // comma
+        assert_eq!(e.text(), "hello,");
+    }
+
+    #[test]
+    fn a_cleared_score_can_be_undone() {
+        let mut e = engine();
+        e.note_on(60, 90, 0); // h
+        e.note_off(60);
+        e.type_space(400);
+        assert_eq!(e.text(), "h ");
+        e.clear();
+        assert_eq!(e.text(), "");
+        assert!(e.undo());
+        assert_eq!(e.text(), "h ");
     }
 
     #[test]

@@ -78,6 +78,10 @@ impl Settings {
         serde_json::from_str(text).map_err(|e| e.to_string())
     }
 
+    pub fn exists() -> bool {
+        path().exists()
+    }
+
     pub fn load() -> Self {
         let path = path();
         let Ok(text) = fs::read_to_string(&path) else {

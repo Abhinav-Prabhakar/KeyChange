@@ -168,6 +168,7 @@ pub struct KeyChangeApp {
     demo_notes: u32,
     caret_on: bool,
     learn: Option<Control>,
+    last_midi: Option<String>,
 }
 
 impl KeyChangeApp {
@@ -186,6 +187,7 @@ impl KeyChangeApp {
         })
         .detach();
         let now = Instant::now();
+        let first_run = !Settings::exists();
         let mut engine = Engine::new();
         Settings::load().apply_to(&mut engine);
         let mut app = Self {
@@ -208,7 +210,14 @@ impl KeyChangeApp {
             demo_notes: 0,
             caret_on: true,
             learn: None,
+            last_midi: None,
         };
+        if first_run {
+            app.set_notice(
+                "First time? ⌘D plays it · Tab opens the map",
+                NoticeKind::Info,
+            );
+        }
         if std::env::var("KC_DEMO").is_ok() {
             app.toggle_demo();
         }
@@ -276,6 +285,18 @@ impl KeyChangeApp {
         let message = midi::parse(&packet.bytes);
         if packet.source == Source::Demo && matches!(&message, Some(MidiMsg::NoteOn { .. })) {
             self.demo_notes = self.demo_notes.saturating_add(1);
+        }
+        let monitor = match &message {
+            Some(MidiMsg::NoteOn { note, velocity }) => {
+                Some(format!("NOTE {} · {}", note_name(*note), velocity))
+            }
+            Some(MidiMsg::Control { cc, value }) => Some(format!("CC {cc} · {value}")),
+            Some(MidiMsg::Aftertouch { pressure }) => Some(format!("AT · {pressure}")),
+            Some(MidiMsg::PitchBend { value }) => Some(format!("BEND · {value}")),
+            _ => None,
+        };
+        if monitor.is_some() {
+            self.last_midi = monitor;
         }
         let now = self.now();
         match message {
@@ -466,7 +487,7 @@ impl KeyChangeApp {
             cx.notify();
             return;
         }
-        if key == "/" {
+        if key == "/" || key == "?" {
             self.overlay = Some(OverlayTab::Gestures);
             self.learn = None;
             cx.notify();
@@ -723,13 +744,17 @@ impl KeyChangeApp {
                     .hover(|s| s.bg(card()))
                     .on_hover(cx.listener(|this, hovered, _, cx| {
                         if *hovered {
-                            let hint = match &this.hub.status {
+                            let mut hint = match &this.hub.status {
                                 MidiStatus::Connected(name) => format!("MIDI LIVE — {name}"),
                                 MidiStatus::Error(err) => format!("MIDI error — {err}"),
                                 MidiStatus::NoDevice => {
                                     "No MIDI found — click to scan again".to_string()
                                 }
                             };
+                            if let Some(last) = &this.last_midi {
+                                hint.push_str(" · ");
+                                hint.push_str(last);
+                            }
                             this.set_hover(Some(Hover::Midi), Some(hint));
                         } else if this.hover_is(Hover::Midi) {
                             this.set_hover(None, None);
@@ -852,7 +877,7 @@ impl KeyChangeApp {
                         if *hovered {
                             this.set_hover(
                                 Some(Hover::Help),
-                                Some("Chords, intervals and pedals (/) ".to_string()),
+                                Some("Chords, intervals, pedals and shortcuts (?)".to_string()),
                             );
                         } else if this.hover_is(Hover::Help) {
                             this.set_hover(None, None);
@@ -2011,6 +2036,15 @@ impl KeyChangeApp {
     // ── status ──────────────────────────────────────────────────────────────
 
     fn status(&self) -> Div {
+        let text = self.engine.text();
+        let words = text.split_whitespace().count();
+        let chars = text.chars().filter(|c| !c.is_whitespace()).count();
+        let fixes = self.engine.corrections;
+        let stats = if text.trim().is_empty() {
+            String::new()
+        } else {
+            format!("{words} W · {chars} C · {fixes} FIX")
+        };
         let notice = self
             .notice
             .as_ref()
@@ -2072,6 +2106,14 @@ impl KeyChangeApp {
                     .flex_row()
                     .items_center()
                     .gap(px(9.))
+                    .when(!stats.is_empty(), |el| {
+                        el.child(
+                            mono(8.)
+                                .text_color(faint())
+                                .child(stats)
+                                .child(div().w(px(1.)).h(px(10.)).bg(hair())),
+                        )
+                    })
                     .child(
                         mono(8.)
                             .text_color(faint())
@@ -2584,6 +2626,40 @@ impl KeyChangeApp {
                     )
                     .child(
                         div()
+                            .id(("resetcc", control as usize))
+                            .w(px(24.))
+                            .h(px(26.))
+                            .rounded(px(5.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(card_warm()))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    let default = control.default_cc();
+                                    if control.get(&this.engine.cc_map) == default {
+                                        this.set_notice(
+                                            format!("{} is already CC {default}", control.label()),
+                                            NoticeKind::Info,
+                                        );
+                                    } else {
+                                        this.engine.cc_map.reset(control);
+                                        this.learn = None;
+                                        this.persist();
+                                        this.set_notice(
+                                            format!("{} → CC {default}", control.label()),
+                                            NoticeKind::Info,
+                                        );
+                                    }
+                                    cx.notify();
+                                }),
+                            )
+                            .child(mono(10.).text_color(muted()).child("↺")),
+                    )
+                    .child(
+                        div()
                             .id(("learn", control as usize))
                             .w(px(82.))
                             .h(px(26.))
@@ -2794,6 +2870,34 @@ impl KeyChangeApp {
                             .gap(px(8.))
                             .child(caps("INTERVAL BIGRAMS", 8.))
                             .child(intervals),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(12.))
+                    .pt(px(10.))
+                    .border_t_1()
+                    .border_color(hair())
+                    .child(caps("SHORTCUTS", 7.))
+                    .children(
+                        [
+                            ("⌘D", "DEMO"),
+                            ("⌘C", "COPY"),
+                            ("⌘Z", "UNDO"),
+                            ("⌘K", "CLEAR"),
+                            ("⌘,", "MIDI LEARN"),
+                            ("TAB", "MAP"),
+                            ("?", "HELP"),
+                        ]
+                        .map(|(key, label)| {
+                            mono(7.5)
+                                .text_color(faint())
+                                .child(format!("{key}  {label}"))
+                        }),
                     ),
             )
             .child(
