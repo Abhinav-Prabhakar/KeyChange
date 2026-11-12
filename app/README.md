@@ -31,7 +31,7 @@ right-click → **Open** (or System Settings → Privacy & Security → **Open A
 cd app
 cargo run          # development build
 make app           # KeyChange.app in app/dist/
-make dmg           # KeyChange-0.3.0.dmg in app/dist/
+make dmg           # KeyChange-<version>.dmg in app/dist/
 ```
 
 `cargo run` is the fastest loop. The bundle adds the icon, the proper app name
