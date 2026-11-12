@@ -17,9 +17,10 @@ step, no account.
 
 ## Install it
 
-**Download** the latest `KeyChange-0.3.0.dmg` from the
-[Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases) page, open it,
-and drag **KeyChange** into Applications.
+**Download** the latest DMG from
+**[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases/latest)**,
+open it, and drag **KeyChange** into Applications. It is 3.4 MB, macOS 14+ on
+Apple Silicon.
 
 The build is ad-hoc signed but not notarised yet, so the first launch needs
 right-click → **Open** (or System Settings → Privacy & Security → **Open Anyway**).
@@ -47,18 +48,18 @@ macOS has been exercised here.
 ## The whole instrument, one screen
 
 Everything is always visible. Nothing is a tab, a modal, or a settings page —
-the two overlays (**Tab** for the map, **/** for gestures) are reference cards,
-not required steps.
+the three overlays (**Tab** for the map, **?** for gestures, **⌘,** for MIDI
+Learn) are reference cards, not required steps.
 
 | Region | What it does |
 |---|---|
 | **Toolbar** | Layer switch (`abc / ABC / 123`), live CC lights, profile picker, MIDI status, demo, shortcuts. |
-| **Overlays** | **Tab** — the Huffman map. **/** — every gesture. **⌘,** — MIDI Learn. |
+| **Overlays** | **Tab** — the Huffman map. **?** — gestures and shortcuts. **⌘,** — MIDI Learn. |
 | **Score** | The transcript, a 20-note staff, and the right rail: NOW (note / interval / chord), WPM and a wheel history. Hover any key or pad to reveal numbers in the rail. |
 | **Chord pads** | Six triads — `the and you that have with` — each showing its three keys and its share of English. Click or play them. |
 | **Keyboard** | Fifteen white keys (Huffman letters) and ten black keys (punctuation), with heat strips, live held-note rings and per-key velocity. |
 | **Deck** | Sustain / soft / sostenuto pedals, a 40–240 ms gate slider, mod-wheel scrubber and base velocity. |
-| **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, profile quality. |
+| **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, live word / character / fix counts and profile quality. |
 
 ## Playing it
 
@@ -95,16 +96,30 @@ the instrument forgiving of rolled chords without ever swallowing a fast run.
 | `⌫` | Delete a character |
 | `Esc` | Close the overlay or cancel remapping |
 | `Tab` | Toggle the map overlay |
-| `/` | Toggle the gesture reference |
+| `?` or `/` | Toggle the gesture reference |
 | `⌘D` | Start / stop the simulated performance |
 | `⌘,` | Open / close MIDI Learn |
 | `⌘C` | Copy the transcript |
 | `⌘Z` | Undo the last edit |
-| `⌘K` | Clear the score |
+| `⌘K` | Clear the score (undoable with `⌘Z`) |
 | `⌘Q` | Quit |
 
 Clicking a key plays it — click high for a soft note, low for a hard one. Pad
 and pedal clicks are the same messages the hardware sends.
+
+## The small things it does for you
+
+- **Punctuation hugs the word.** A comma, full stop or question mark removes the
+  space before it, so `hello ,` becomes `hello,` the moment the key lands.
+- **Clear is undoable.** `⌘K` still wipes the score, but `⌘Z` brings it back.
+- **Live session stats.** The status bar counts words, characters and
+  corrections for the current score, and clears when the score does.
+- **MIDI monitor.** Hover the MIDI status to see the last message decoded:
+  `NOTE C4 · 96`, `CC 64 · 127`, `AT · 80`, `BEND · 2048`.
+- **First-run tip.** A new install shows a single hint in the status bar:
+  `First time? ⌘D plays it · Tab opens the map`. It disappears as you play.
+- **Per-control reset.** Each MIDI Learn row has its own **↺** button. Reset one
+  pedal without disturbing the rest of the map.
 
 ## Profiles
 
@@ -135,8 +150,9 @@ Open **⌘,**. Every control the app listens for is listed with its current CC:
 
 Hit **LEARN**, move the pedal or knob, and the number is captured. Learning a
 number that already belongs to another control swaps the two, so the map never
-ends up with two owners for one knob. **RESET TO DEFAULTS** restores the spec
-numbers. Aftertouch is fixed to *accept completion*; pitch bend always scrubs.
+ends up with two owners for one knob. The **↺** beside each row restores just
+that control; **RESET TO DEFAULTS** restores the spec numbers. Aftertouch is
+fixed to *accept completion*; pitch bend always scrubs.
 
 ## How it is built
 
@@ -169,7 +185,7 @@ no font dependency on the OS.
 cargo test
 ```
 
-54 tests cover the parts that are easy to break: velocity buckets, layer
+57 tests cover the parts that are easy to break: velocity buckets, layer
 precision, chord timing, interval and octave gestures, sustain gaps, quantize
 and candidate acceptance, WPM, undo/delete, profile scoring and remapping, CC
 routing and learning, settings round-trips and repair, MIDI byte parsing, and

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.1 — 2026-11-12
+
+The small things that make it feel finished.
+
+**Added**
+- Smart punctuation spacing: `hello ,` becomes `hello,` the moment the key lands.
+- Live session stats in the status bar: words, characters and corrections.
+- A live MIDI monitor in the MIDI hover: note, CC, aftertouch or bend, decoded.
+- Per-control MIDI reset (↺) beside each row in MIDI Learn.
+- A `?` shortcut for the gesture sheet, with a full shortcut row in the card.
+- A one-line first-run tip for new installs.
+
+**Changed**
+- `⌘K` clearing the score is now undoable with `⌘Z`.
+- The landing page download button points at GitHub Releases and labels itself
+  for the visitor's operating system.
+- Release downloads are documented as macOS 14+ on Apple Silicon, 3.4 MB.
+
 ## 0.3.0 — 2026-11-12
 
 The first installable build.

@@ -390,9 +390,20 @@ const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.targ
 $$('.reveal').forEach(el=>io.observe(el));
 addEventListener('scroll',()=>{const h=document.documentElement;const p=h.scrollTop/Math.max(1,(h.scrollHeight-h.clientHeight));const pp=$('#pitchProgress');if(pp)pp.style.setProperty('--p',(p*100)+'%')},{passive:true});
 
-// encore ticket tilt + free download + confetti
+// encore ticket tilt + download → GitHub Releases (labelled for this OS)
 const ticket=$('#ticket');if(ticket)ticket.addEventListener('pointermove',e=>{const r=e.currentTarget.getBoundingClientRect();e.currentTarget.style.transform=`perspective(900px) rotateY(${((e.clientX-r.left)/r.width-.5)*4}deg)`;});
-const dlBtn=$('#dlBtn');if(dlBtn)dlBtn.onclick=e=>{e.preventDefault();[60,64,67,72].forEach((mm,i)=>setTimeout(()=>tone(mm,100,.5),i*110));burst2();toast('★ ENCORE! download started — FREE FOREVER ★');};
+const RELEASES='https://github.com/Abhinav-Prabhakar/KeyChange/releases/latest';
+const thisOS=(()=>{const raw=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||'';const ua=navigator.userAgent||'';if(/mac/i.test(raw)||/mac os x/i.test(ua))return'mac';if(/win/i.test(raw)||/windows/i.test(ua))return'win';if(/iphone|ipad|ipod/i.test(ua))return'ios';if(/android/i.test(raw)||/android/i.test(ua))return'android';if(/linux|x11/i.test(raw)||/linux/i.test(ua))return'linux';return'other'})();
+const dlBtn=$('#dlBtn'),dlNote=$('#dlNote');
+if(dlBtn&&thisOS!=='mac'){
+  dlBtn.textContent=thisOS==='win'?'⬇ DOWNLOAD (MACOS BUILD)':'⬇ DOWNLOAD MACOS BUILD';
+  dlBtn.setAttribute('aria-label','Download the macOS build from GitHub Releases');
+}
+if(dlNote&&thisOS!=='mac'){
+  const soon=thisOS==='win'?'WINDOWS BUILD COMING SOON':thisOS==='linux'?'LINUX BUILD COMING SOON':thisOS==='ios'?'THIS IS AN IPHONE / IPAD':'THIS BUILD IS MACOS ONLY';
+  dlNote.textContent=`${soon} · THE MACOS DMG IS AVAILABLE · OR PLAY THE WEB VERSION ↑`;
+}
+if(dlBtn)dlBtn.addEventListener('click',()=>{[60,64,67,72].forEach((mm,i)=>setTimeout(()=>tone(mm,100,.5),i*110));burst2();toast('★ ENCORE! opening GitHub Releases ★');});
 function burst2(){const c=$('#confetti');if(!c)return;for(let i=0;i<26;i++){const s=document.createElement('i');s.textContent=['♪','♫','A','K','E','Y','S','★'][i%8];s.style.left=Math.random()*100+'%';s.style.color=['#ff2e1f','#2233ff','#17130c'][i%3];s.style.background='#fff8e8';s.style.border='2px solid #17130c';s.style.padding='0 5px';s.style.fontSize=(14+Math.random()*22)+'px';s.style.animationDuration=(1.4+Math.random()*1.6)+'s';c.appendChild(s);setTimeout(()=>s.remove(),3200)}}
 // hero interactive headline
 (function(){const h=$('#headline');if(!h)return;const scale=[60,62,64,65,67,69,71,72,74,76,77,79,81,84];let i=0;function split(node){[...node.childNodes].forEach(ch=>{if(ch.nodeType===3){const frag=document.createDocumentFragment();[...ch.textContent].forEach(c=>{if(c.trim()===''){frag.appendChild(document.createTextNode(' '))}else{const s=document.createElement('span');s.className='ltr';s.textContent=c;s.addEventListener('mouseenter',()=>{tone(scale[i++%scale.length],90,.4);eqKick()});frag.appendChild(s)}});node.replaceChild(frag,ch)}else if(ch.nodeType===1&&!ch.classList.contains('note-chip'))split(ch)})}split(h)})();
