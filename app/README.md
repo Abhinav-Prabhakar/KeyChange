@@ -61,12 +61,12 @@ Learn) are reference cards, not required steps.
 | Region | What it does |
 |---|---|
 | **Toolbar** | Layer switch (`abc / ABC / 123`), live CC lights, profile picker, MIDI status, demo, shortcuts. |
-| **Overlays** | **Tab** — the Huffman map. **?** — gestures, click any tile to play it. **⌘,** — MIDI Learn and input device. |
+| **Overlays** | **Tab** — the Huffman map. **?** — gestures, click any tile to play it. **⌘,** — MIDI Learn and input device. **⌘/** — every keyboard shortcut. |
 | **Score** | The transcript, a 20-note staff, and the right rail: NOW (note / interval / chord), WPM and a wheel history. Hover any key or pad to reveal numbers in the rail. |
 | **Chord pads** | Six triads — `the and you that have with` — each showing its three keys and its share of English. Click or play them. |
 | **Keyboard** | Fifteen white keys (Huffman letters) and ten black keys (punctuation), with heat strips, live held-note rings and per-key velocity. The drawn two octaves are the main bank; the rest of your controller reaches the low and high banks. |
 | **Deck** | Sustain / soft / sostenuto pedals, a click-or-drag 40–240 ms gate with **TAP** tempo, mod-wheel scrubber and base velocity. |
-| **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, update badge, live word / character / fix counts and profile quality. |
+| **Status bar** | MIDI state (`MIDI LIVE`, `SIMULATED MIDI · n NOTES`, `NO MIDI`), notice line, DARK/PAPER and KEYS chips, update badge, live word / character / fix counts and profile quality. |
 
 ## Playing it
 
@@ -131,8 +131,18 @@ F, G and A shapes reach up past C3 without losing their second meaning.
 | `?` or `/` | Toggle the gesture reference |
 | `⌘D` | Start / stop the simulated performance |
 | `⌘P` | Start / stop practice |
+| `⌘T` | Tap tempo for the chord gate |
+| `⌘←` / `⌘→` | Gate −10 / +10 ms |
+| `⌘↑` / `⌘↓` | Velocity +5 / −5 |
+| `⌘L` | Cycle `abc` / `ABC` / `123` |
+| `⌘[` / `⌘]` | Previous / next layout profile |
+| `⌘1`–`⌘4` | Map / gestures / MIDI / keys |
+| `⌘⇧D` | Dark stage / paper stage |
+| `⌘⇧M` | Next MIDI input |
+| `⌘R` | Rescan MIDI inputs |
 | `⌘U` | Check for updates / install one |
 | `⌘,` | Open / close MIDI Learn |
+| `⌘/` | Every keyboard shortcut |
 | `⌘C` | Copy the transcript |
 | `⌘Z` | Undo the last edit |
 | `⌘K` | Clear the score (undoable with `⌘Z`) |
@@ -140,6 +150,25 @@ F, G and A shapes reach up past C3 without losing their second meaning.
 
 Clicking a key plays it — click high for a soft note, low for a hard one. Pad
 and pedal clicks are the same messages the hardware sends.
+
+### Every shortcut in one dialog
+
+<img src="assets/screenshot-keys-dialog.png" alt="The Keys dialog listing every binding in four groups: play, text, view and system" width="100%">
+
+**⌘/** opens a grouped reference for every binding — Play, Text, View and
+System — and **⌘1**–**⌘4** jump straight to the map, gesture sheet, MIDI panel
+or this dialog. The same card is a click away as **KEYS** in the status bar.
+
+### Dark stage
+
+<img src="assets/screenshot-dark.png" alt="KeyChange in dark mode after a simulated performance, with warm charcoal surfaces and the same yellow and blue accents" width="100%">
+
+**⌘⇧D** (or the moon in the status bar) flips between the paper stage and a
+warm charcoal one. Every palette colour is a per-frame lerp between the two,
+so borders, shadows, key separators and hover washes move together rather than
+snapping. A ripple of the incoming stage expands from the toggle, and the choice
+is saved. Text on yellow uses a fixed dark ink in both stages, which keeps the
+chord pads, NOW tile and selected chips readable through the transition.
 
 ### Practice and audition
 
@@ -172,7 +201,7 @@ a newly connected keyboard and posts a toast; **SCAN ↻** does it immediately.
 ### Updates
 
 **⌘U** asks GitHub Releases for the latest tag. When it is newer, a badge appears
-in the status bar (`↑ 0.5.0`); pressing **⌘U** again downloads the DMG, requires
+in the status bar (`↑ 0.6.0`); pressing **⌘U** again downloads the DMG, requires
 and verifies the published `.sha256`, mounts it, and either replaces a writable
 bundle and relaunches or opens the DMG in Finder. Only GitHub Releases is used,
 and a missing or mismatched checksum cancels the install.
@@ -188,6 +217,8 @@ and a missing or mismatched checksum cancels the install.
   `NOTE C4 · 96`, `CC 64 · 127`, `AT · 80`, `BEND · 2048`.
 - **First-run tip.** A new install shows a single hint in the status bar:
   `First time? ⌘D plays it · Tab opens the map`. It disappears as you play.
+- **Theme memory.** The paper/dark choice is written with the rest of the
+  settings and restored before the first frame, so a dark launch does not flash.
 - **Per-control reset.** Each MIDI Learn row has its own **↺** button. Reset one
   pedal without disturbing the rest of the map.
 
@@ -199,8 +230,8 @@ effort, and a live quality score. **Duplicate** clones the active layout into a
 custom profile; **Remap** swaps two white keys by clicking their columns. Score
 is `Σ frequency × effort`, so layouts can be compared against the optimum.
 
-Layouts, the active profile, layer, velocity, gate, learned CCs and the pinned
-MIDI device are saved to
+Layouts, the active profile, layer, velocity, gate, learned CCs, the pinned
+MIDI device and the paper/dark stage are saved to
 `~/Library/Application Support/KeyChange/settings.json` (XDG paths on Linux) and
 restored on launch. A corrupt file is moved aside rather than blocking startup.
 
@@ -242,6 +273,8 @@ app/
 │   ├── updater.rs   GitHub Releases check, checksum verification, DMG staging
 │   │                and the relaunch helper.
 │   └── ui.rs        The single-screen GPUI view, overlays and all interactions.
+│                    The two-stage palette is one animated atomic, so every
+│                    colour, shadow and glyph follows the same transition.
 ├── assets/          App icon (SVG + ICNS), fonts (OFL, licences included).
 ├── scripts/         bundle.sh, dmg.sh, make-icon.sh.
 ├── Info.plist       Bundle identity, version, icon, macOS metadata.

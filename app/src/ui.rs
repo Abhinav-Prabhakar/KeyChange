@@ -20,57 +20,120 @@ use crate::settings::Settings;
 use crate::updater::{self, Release};
 
 // ─────────────────────────────────── palette ───────────────────────────────
+//
+// Two stages, one palette. Every colour is a lerp between the warm paper stage
+// and the dark stage, driven by a single atomic value so even nested closures
+// pick up the transition on the next frame. `THEME_MIX` is 0 (paper) … 1000
+// (dark); the app eases it while the ripple spreads.
+
+use std::sync::atomic::{AtomicU32, Ordering};
+
+static THEME_MIX: AtomicU32 = AtomicU32::new(0);
+
+fn theme_t() -> f32 {
+    THEME_MIX.load(Ordering::Relaxed) as f32 / 1000.0
+}
+
+fn lerp(a: gpui::Rgba, b: gpui::Rgba, t: f32) -> gpui::Rgba {
+    gpui::Rgba {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: a.a + (b.a - a.a) * t,
+    }
+}
+
+fn mix(light: u32, dark: u32) -> gpui::Rgba {
+    lerp(rgb(light), rgb(dark), theme_t())
+}
+
+fn mix_rgba(light: u32, dark: u32) -> gpui::Rgba {
+    lerp(rgba(light), rgba(dark), theme_t())
+}
 
 fn paper() -> gpui::Rgba {
-    rgb(0xf6edda)
+    mix(0xf6edda, 0x12100a)
 }
 fn card() -> gpui::Rgba {
-    rgb(0xfffbf1)
+    mix(0xfffbf1, 0x1c1811)
 }
 fn card_warm() -> gpui::Rgba {
-    rgb(0xfff3d2)
+    mix(0xfff3d2, 0x262116)
 }
 fn side() -> gpui::Rgba {
-    rgb(0xefe6d0)
+    mix(0xefe6d0, 0x211d14)
 }
 fn hair() -> gpui::Rgba {
-    rgb(0xe0d5bd)
+    mix(0xe0d5bd, 0x322d22)
 }
 fn hair_dark() -> gpui::Rgba {
-    rgb(0xc9bda3)
+    mix(0xc9bda3, 0x4a4335)
 }
 fn ink() -> gpui::Rgba {
-    rgb(0x17130c)
+    mix(0x17130c, 0xf7efdd)
 }
 fn ink_soft() -> gpui::Rgba {
-    rgb(0x3a342a)
+    mix(0x3a342a, 0xd9cfb9)
 }
 fn muted() -> gpui::Rgba {
-    rgb(0x6f6a5e)
+    mix(0x6f6a5e, 0xb3a892)
 }
 fn faint() -> gpui::Rgba {
-    rgb(0x9a927f)
+    mix(0x9a927f, 0x978c79)
 }
 fn red() -> gpui::Rgba {
-    rgb(0xff2e1f)
+    mix(0xff2e1f, 0xff6f5c)
 }
 fn blue() -> gpui::Rgba {
-    rgb(0x2233ff)
+    mix(0x2233ff, 0x8b96ff)
 }
 fn yellow() -> gpui::Rgba {
     rgb(0xffc700)
 }
 fn green() -> gpui::Rgba {
-    rgb(0x0e7a4f)
+    mix(0x0e7a4f, 0x4ccf95)
 }
 fn ivory() -> gpui::Rgba {
-    rgb(0xfffdf6)
+    mix(0xfffdf6, 0x2a251c)
 }
 fn keydark() -> gpui::Rgba {
-    rgb(0x1b1915)
+    mix(0x1b1915, 0x100e09)
 }
 fn keydark2() -> gpui::Rgba {
-    rgb(0x24211b)
+    mix(0x24211b, 0x0a0906)
+}
+
+/// Text and marks that sit on yellow, red or green. Always dark, in both stages.
+fn on_accent() -> gpui::Rgba {
+    rgb(0x17130c)
+}
+
+/// A yellow accent that sits on an `ink()` surface. Ink flips in the dark, so
+/// this flips with it instead of turning into yellow-on-cream.
+fn on_ink() -> gpui::Rgba {
+    mix(0xffc700, 0x17130c)
+}
+
+/// The worst-case paper colour, for the theme ripple. Deliberately not part of
+/// the animated mix: the wave is the destination stage arriving.
+fn paper_at(dark: bool) -> gpui::Rgba {
+    rgb(if dark { 0x12100a } else { 0xf6edda })
+}
+
+fn key_sep() -> gpui::Rgba {
+    mix(0xd9cfb9, 0x17130f)
+}
+fn key_chord() -> gpui::Rgba {
+    mix(0xffe9a8, 0x4d4227)
+}
+fn key_hover() -> gpui::Rgba {
+    mix(0xfff3d2, 0x3b3528)
+}
+fn key_black_hover() -> gpui::Rgba {
+    mix(0x332e26, 0x4a4335)
+}
+fn glyph_black() -> gpui::Rgba {
+    rgb(0x100e0a)
 }
 
 const UI: &str = "Space Grotesk";
@@ -85,7 +148,7 @@ fn op(c: gpui::Rgba, a: f32) -> gpui::Hsla {
 
 fn soft_shadow() -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: rgba(0x17130c1a).into(),
+        color: mix_rgba(0x17130c1a, 0x00000066).into(),
         offset: point(px(0.), px(10.)),
         blur_radius: px(28.),
         spread_radius: px(-6.),
@@ -94,7 +157,7 @@ fn soft_shadow() -> Vec<BoxShadow> {
 
 fn float_shadow() -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: rgba(0x17130c30).into(),
+        color: mix_rgba(0x17130c30, 0x00000099).into(),
         offset: point(px(0.), px(24.)),
         blur_radius: px(60.),
         spread_radius: px(-12.),
@@ -111,6 +174,18 @@ fn mono(size: f32) -> Div {
 
 fn caps(text: impl Into<SharedString>, size: f32) -> Div {
     mono(size).child(text.into())
+}
+
+fn ease_in_out(t: f32) -> f32 {
+    if t < 0.5 {
+        2.0 * t * t
+    } else {
+        1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+    }
+}
+
+fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
 }
 
 // ───────────────────────────── gesture playground ──────────────────────────
@@ -244,6 +319,8 @@ enum Hover {
     Midi,
     Demo,
     Help,
+    Theme,
+    Keys,
     MapCol(usize),
 }
 
@@ -252,6 +329,7 @@ enum OverlayTab {
     Map,
     Gestures,
     Learn,
+    Keys,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -264,6 +342,12 @@ struct Notice {
     text: String,
     at: u64,
     kind: NoticeKind,
+}
+
+/// The circle of the new stage, expanding from wherever the toggle was pressed.
+struct Ripple {
+    started: Instant,
+    center: Option<(f32, f32)>,
 }
 
 struct Pulse {
@@ -339,6 +423,8 @@ pub struct KeyChangeApp {
     practice: Option<Practice>,
     taps: Vec<u64>,
     update: UpdateState,
+    dark: bool,
+    ripple: Option<Ripple>,
 }
 
 impl KeyChangeApp {
@@ -346,6 +432,8 @@ impl KeyChangeApp {
         let first_run = !Settings::exists();
         let settings = Settings::load();
         let midi_device = settings.midi_device.clone();
+        let dark = settings.dark;
+        THEME_MIX.store(if dark { 1000 } else { 0 }, Ordering::Relaxed);
         let mut engine = Engine::new();
         settings.apply_to(&mut engine);
         let mut hub = MidiHub::new();
@@ -390,6 +478,8 @@ impl KeyChangeApp {
             practice: None,
             taps: Vec::new(),
             update: UpdateState::Idle,
+            dark,
+            ripple: None,
         };
         if first_run {
             app.set_notice(
@@ -434,6 +524,7 @@ impl KeyChangeApp {
     fn persist(&mut self) {
         let mut settings = Settings::from_engine(&self.engine);
         settings.midi_device = self.midi_device.clone();
+        settings.dark = self.dark;
         if let Err(err) = settings.save() {
             self.set_notice(format!("Settings not saved · {err}"), NoticeKind::Info);
         }
@@ -459,6 +550,128 @@ impl KeyChangeApp {
             self.hub.start_demo();
             self.set_notice("Simulated MIDI · play your words loud", NoticeKind::Good);
         }
+    }
+
+    // ── theme ──────────────────────────────────────────────────────────────
+
+    fn toggle_theme(&mut self, center: Option<(f32, f32)>, cx: &mut Context<Self>) {
+        let target = !self.dark;
+        self.dark = target;
+        self.persist();
+        self.ripple = Some(Ripple {
+            started: Instant::now(),
+            center,
+        });
+        self.set_notice(
+            if target {
+                "Dark stage · the hand still finds the keys"
+            } else {
+                "Paper stage · back to daylight"
+            },
+            NoticeKind::Info,
+        );
+        let from = theme_t();
+        let to = if target { 1.0 } else { 0.0 };
+        cx.spawn(async move |this, cx| {
+            let started = Instant::now();
+            loop {
+                let t = (started.elapsed().as_secs_f32() / 0.58).min(1.0);
+                let eased = ease_in_out(t);
+                let value = ((from + (to - from) * eased) * 1000.0).round();
+                THEME_MIX.store(value as u32, Ordering::Relaxed);
+                if this
+                    .update(cx, |this, cx| {
+                        if t >= 1.0 {
+                            this.ripple = None;
+                        }
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+                if t >= 1.0 {
+                    break;
+                }
+                smol::Timer::after(Duration::from_millis(16)).await;
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn cycle_layer(&mut self, delta: i32, cx: &mut Context<Self>) {
+        self.engine.cycle_layer(delta);
+        self.persist();
+        let name = match self.engine.layer {
+            Layer::Abc => "abc",
+            Layer::Upper => "ABC",
+            Layer::Symbols => "123",
+        };
+        self.set_notice(format!("Layer {name}"), NoticeKind::Info);
+        cx.notify();
+    }
+
+    fn cycle_profile(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let count = self.engine.profiles.len();
+        if count == 0 {
+            return;
+        }
+        let next = (self.engine.profile_index as i32 + delta).rem_euclid(count as i32) as usize;
+        self.engine.set_profile(next);
+        self.edit_mode = false;
+        self.persist();
+        let name = self.engine.active_profile().name.clone();
+        self.set_notice(format!("Profile · {name}"), NoticeKind::Info);
+        cx.notify();
+    }
+
+    fn nudge_velocity(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let next = (self.engine.base_velocity as i32 + delta).clamp(1, 127) as u8;
+        self.engine.set_base_velocity(next);
+        self.persist();
+        self.set_notice(format!("Velocity {next}"), NoticeKind::Info);
+        cx.notify();
+    }
+
+    fn cycle_midi(&mut self, cx: &mut Context<Self>) {
+        let mut options: Vec<Option<String>> = vec![None];
+        options.extend(self.hub.devices.iter().cloned().map(Some));
+        if options.len() == 1 {
+            self.set_notice(
+                "No MIDI inputs · plug in a keyboard, or press ⌘R",
+                NoticeKind::Info,
+            );
+            cx.notify();
+            return;
+        }
+        let index = options
+            .iter()
+            .position(|option| option == &self.midi_device)
+            .unwrap_or(0);
+        let next = options[(index + 1) % options.len()].clone();
+        self.choose_midi(next, cx);
+    }
+
+    fn rescan_midi(&mut self, cx: &mut Context<Self>) {
+        self.hub.reconnect();
+        let text = match &self.hub.status {
+            MidiStatus::Connected(name) => format!("MIDI connected · {name}"),
+            MidiStatus::Error(err) => format!("MIDI error · {err}"),
+            MidiStatus::NoDevice => "No MIDI device found".to_string(),
+        };
+        self.set_notice(text, NoticeKind::Info);
+        cx.notify();
+    }
+
+    fn show_overlay(&mut self, tab: OverlayTab, cx: &mut Context<Self>) {
+        self.overlay = if self.overlay == Some(tab) {
+            None
+        } else {
+            Some(tab)
+        };
+        self.learn = None;
+        cx.notify();
     }
 
     #[allow(clippy::collapsible_match)]
@@ -914,10 +1127,15 @@ impl KeyChangeApp {
         let command = modifiers.platform || modifiers.control;
         let now = self.now();
         if command {
-            match key {
-                "d" => self.toggle_demo(),
-                "p" => self.toggle_practice(cx),
-                "u" => {
+            match (key, modifiers.shift) {
+                ("d", true) => {
+                    self.toggle_theme(None, cx);
+                    return;
+                }
+                ("d", false) => self.toggle_demo(),
+                ("p", _) => self.toggle_practice(cx),
+                ("t", _) => self.tap_gate(cx),
+                ("u", _) => {
                     if matches!(self.update, UpdateState::Available(_)) {
                         self.install_update(cx);
                     } else {
@@ -925,22 +1143,37 @@ impl KeyChangeApp {
                     }
                     return;
                 }
-                "z" => {
+                ("m", true) => self.cycle_midi(cx),
+                ("r", _) => self.rescan_midi(cx),
+                ("l", _) => self.cycle_layer(1, cx),
+                ("[", _) => self.cycle_profile(-1, cx),
+                ("]", _) => self.cycle_profile(1, cx),
+                ("left", _) => {
+                    let next = self.engine.timing_ms.saturating_sub(10);
+                    self.set_gate(next, cx);
+                }
+                ("right", _) => {
+                    let next = self.engine.timing_ms.saturating_add(10);
+                    self.set_gate(next, cx);
+                }
+                ("up", _) => self.nudge_velocity(5, cx),
+                ("down", _) => self.nudge_velocity(-5, cx),
+                ("z", _) => {
                     self.engine.undo();
                 }
-                "c" => {
+                ("c", _) => {
                     let text = self.engine.text();
                     cx.write_to_clipboard(ClipboardItem::new_string(text));
                     self.set_notice("Copied to clipboard", NoticeKind::Info);
                 }
-                "k" => {
+                ("k", _) => {
                     self.engine.clear();
                     self.set_notice("Cleared", NoticeKind::Info);
                 }
-                "q" => {
+                ("q", _) => {
                     cx.quit();
                 }
-                "," => {
+                (",", _) => {
                     self.overlay = if self.overlay == Some(OverlayTab::Learn) {
                         None
                     } else {
@@ -948,6 +1181,11 @@ impl KeyChangeApp {
                     };
                     self.learn = None;
                 }
+                ("/", _) => self.show_overlay(OverlayTab::Keys, cx),
+                ("1", _) => self.show_overlay(OverlayTab::Map, cx),
+                ("2", _) => self.show_overlay(OverlayTab::Gestures, cx),
+                ("3", _) => self.show_overlay(OverlayTab::Learn, cx),
+                ("4", _) => self.show_overlay(OverlayTab::Keys, cx),
                 _ => return,
             }
             cx.notify();
@@ -1093,7 +1331,7 @@ impl KeyChangeApp {
                             .rounded(px(8.))
                             .bg(yellow())
                             .border_1()
-                            .border_color(ink())
+                            .border_color(on_accent())
                             .flex()
                             .items_center()
                             .justify_center()
@@ -1102,7 +1340,7 @@ impl KeyChangeApp {
                                     .font_family(DISPLAY)
                                     .font_weight(FontWeight::BLACK)
                                     .text_size(px(15.))
-                                    .text_color(ink())
+                                    .text_color(on_accent())
                                     .child("♪"),
                             ),
                     )
@@ -1332,7 +1570,7 @@ impl KeyChangeApp {
                         div()
                             .font_family(MONO)
                             .text_size(px(9.))
-                            .text_color(yellow())
+                            .text_color(on_ink())
                             .child(if self.hub.demo_running { "■" } else { "▶" }),
                     )
                     .child(
@@ -1366,7 +1604,9 @@ impl KeyChangeApp {
                         if *hovered {
                             this.set_hover(
                                 Some(Hover::Help),
-                                Some("Chords, intervals, pedals and shortcuts (?)".to_string()),
+                                Some(
+                                    "Chords, intervals and pedals (?) · shortcuts (⌘/)".to_string(),
+                                ),
                             );
                         } else if this.hover_is(Hover::Help) {
                             this.set_hover(None, None);
@@ -1677,7 +1917,7 @@ impl KeyChangeApp {
                                 FontWeight::MEDIUM
                             })
                             .text_size(px(11.))
-                            .text_color(if on { yellow() } else { ink() })
+                            .text_color(if on { on_ink() } else { ink() })
                             .child(word),
                     ),
             );
@@ -1856,14 +2096,14 @@ impl KeyChangeApp {
                             .rounded(px(13.))
                             .bg(tile_bg)
                             .border_1()
-                            .border_color(if is_word { ink() } else { hair() })
+                            .border_color(if is_word { on_accent() } else { hair() })
                             .flex()
                             .items_center()
                             .justify_center()
                             .font_family(DISPLAY)
                             .font_weight(FontWeight::EXTRA_BOLD)
                             .text_size(px(font_size))
-                            .text_color(ink())
+                            .text_color(if is_word { on_accent() } else { ink() })
                             .child(glyph),
                     )
                     .child(
@@ -2028,7 +2268,7 @@ impl KeyChangeApp {
             let bg = if held || pulse {
                 yellow()
             } else if in_chord {
-                rgb(0xffe9a8)
+                key_chord()
             } else {
                 ivory()
             };
@@ -2047,9 +2287,9 @@ impl KeyChangeApp {
                 .pb(px(11.))
                 .gap(px(5.))
                 .bg(bg)
-                .when(i < 14, |el| el.border_r_1().border_color(rgb(0xd9cfb9)))
+                .when(i < 14, |el| el.border_r_1().border_color(key_sep()))
                 .cursor_pointer()
-                .hover(|s| s.bg(card_warm()))
+                .when(!(held || pulse), |el| el.hover(|s| s.bg(key_hover())))
                 .on_hover(cx.listener(move |this, hovered, _, cx| {
                     if *hovered {
                         let glyph = this.engine.preview_white(i);
@@ -2114,7 +2354,7 @@ impl KeyChangeApp {
                                     .h(px(30.))
                                     .rounded_full()
                                     .border_2()
-                                    .border_color(op(ink(), 0.30)),
+                                    .border_color(op(on_accent(), 0.30)),
                             ),
                     )
                 });
@@ -2141,7 +2381,7 @@ impl KeyChangeApp {
                         .rounded_b(px(5.))
                         .bg(if held || pulse { red() } else { keydark2() })
                         .border_1()
-                        .border_color(rgb(0x0b0a08))
+                        .border_color(glyph_black())
                         .shadow(vec![BoxShadow {
                             color: rgba(0x00000055).into(),
                             offset: point(px(2.), px(5.)),
@@ -2153,7 +2393,7 @@ impl KeyChangeApp {
                         .justify_center()
                         .pb(px(9.))
                         .cursor_pointer()
-                        .hover(|s| s.bg(rgb(0x332e26)))
+                        .hover(|s| s.bg(key_black_hover()))
                         .on_hover(cx.listener(move |this, hovered, _, cx| {
                             if *hovered {
                                 this.set_hover(
@@ -2602,7 +2842,7 @@ impl KeyChangeApp {
                                     .left(px(3.))
                                     .right(px(3.))
                                     .h(px(1.))
-                                    .bg(rgba(0xf6edda22))
+                                    .bg(mix_rgba(0xf6edda22, 0xffffff12))
                             }))
                             .child(
                                 div()
@@ -2731,6 +2971,89 @@ impl KeyChangeApp {
                                 .child(div().w(px(1.)).h(px(10.)).bg(hair())),
                         )
                     })
+                    .child(
+                        div()
+                            .id("theme-chip")
+                            .h(px(18.))
+                            .px(px(7.))
+                            .rounded(px(4.))
+                            .border_1()
+                            .border_color(hair())
+                            .bg(card())
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(card_warm()).border_color(hair_dark()))
+                            .on_hover(cx.listener(|this, hovered, _, cx| {
+                                if *hovered {
+                                    this.set_hover(
+                                        Some(Hover::Theme),
+                                        Some("Dark stage · ⌘⇧D".to_string()),
+                                    );
+                                } else if this.hover_is(Hover::Theme) {
+                                    this.set_hover(None, None);
+                                }
+                                cx.notify();
+                            }))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, ev: &gpui::MouseDownEvent, _, cx| {
+                                    this.toggle_theme(
+                                        Some((ev.position.x.into(), ev.position.y.into())),
+                                        cx,
+                                    );
+                                }),
+                            )
+                            .child(
+                                mono(8.5)
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(ink())
+                                    .child(if self.dark { "☀" } else { "☾" }),
+                            )
+                            .child(mono(7.5).text_color(faint()).child(if self.dark {
+                                "PAPER"
+                            } else {
+                                "DARK"
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("keys-chip")
+                            .h(px(18.))
+                            .px(px(7.))
+                            .rounded(px(4.))
+                            .border_1()
+                            .border_color(hair())
+                            .bg(card())
+                            .flex()
+                            .items_center()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(card_warm()).border_color(hair_dark()))
+                            .on_hover(cx.listener(|this, hovered, _, cx| {
+                                if *hovered {
+                                    this.set_hover(
+                                        Some(Hover::Keys),
+                                        Some("Every keyboard shortcut · ⌘/".to_string()),
+                                    );
+                                } else if this.hover_is(Hover::Keys) {
+                                    this.set_hover(None, None);
+                                }
+                                cx.notify();
+                            }))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.show_overlay(OverlayTab::Keys, cx);
+                                }),
+                            )
+                            .child(
+                                mono(7.5)
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(ink())
+                                    .child("KEYS"),
+                            ),
+                    )
                     .when_some(update_chip, |el, (label, ready)| {
                         el.child(
                             div()
@@ -2756,7 +3079,7 @@ impl KeyChangeApp {
                                 .child(
                                     mono(8.)
                                         .font_weight(FontWeight::BOLD)
-                                        .text_color(ink())
+                                        .text_color(if ready { on_accent() } else { ink() })
                                         .child(label),
                                 ),
                         )
@@ -2835,7 +3158,8 @@ impl KeyChangeApp {
             .bg(side())
             .child(tab_button("MAP", OverlayTab::Map, cx))
             .child(tab_button("GESTURES", OverlayTab::Gestures, cx))
-            .child(tab_button("MIDI", OverlayTab::Learn, cx));
+            .child(tab_button("MIDI", OverlayTab::Learn, cx))
+            .child(tab_button("KEYS", OverlayTab::Keys, cx));
 
         let header = div()
             .flex()
@@ -2884,6 +3208,7 @@ impl KeyChangeApp {
             OverlayTab::Map => self.map_body(cx),
             OverlayTab::Gestures => self.gestures_body(cx),
             OverlayTab::Learn => self.learn_body(cx),
+            OverlayTab::Keys => self.keys_body(),
         };
 
         let card = div()
@@ -2916,7 +3241,7 @@ impl KeyChangeApp {
                     .top(px(0.))
                     .left(px(0.))
                     .size_full()
-                    .bg(rgba(0x17130caa))
+                    .bg(mix_rgba(0x17130caa, 0x030202dd))
                     .on_mouse_down(MouseButton::Left, dismiss),
             )
             .child(card)
@@ -2962,7 +3287,7 @@ impl KeyChangeApp {
                             .font_family(UI)
                             .font_weight(FontWeight::MEDIUM)
                             .text_size(px(10.5))
-                            .text_color(ink())
+                            .text_color(if on { on_accent() } else { ink() })
                             .child(p.name.clone()),
                     ),
             );
@@ -3202,7 +3527,7 @@ impl KeyChangeApp {
                             .child(
                                 mono(9.)
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(if editing { yellow() } else { ink() })
+                                    .text_color(if editing { on_ink() } else { ink() })
                                     .child(if editing { "DONE" } else { "REMAP" }),
                             ),
                     ),
@@ -3247,7 +3572,7 @@ impl KeyChangeApp {
                         .font_family(MONO)
                         .font_weight(FontWeight::BOLD)
                         .text_size(px(8.5))
-                        .text_color(ink())
+                        .text_color(if active { on_accent() } else { ink() })
                         .child(label),
                 )
                 .when(detected, |el| {
@@ -3355,7 +3680,7 @@ impl KeyChangeApp {
                             .child(
                                 mono(8.5)
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(ink())
+                                    .text_color(if listening { on_accent() } else { ink() })
                                     .child(format!("CC {cc}")),
                             ),
                     )
@@ -3426,7 +3751,7 @@ impl KeyChangeApp {
                             .child(
                                 mono(8.5)
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(if listening { yellow() } else { ink() })
+                                    .text_color(if listening { on_ink() } else { ink() })
                                     .child(if listening { "LISTENING…" } else { "LEARN" }),
                             ),
                     ),
@@ -3530,6 +3855,145 @@ impl KeyChangeApp {
                     )
                     .child(div().flex_1())
                     .child(reset),
+            )
+    }
+
+    fn keys_body(&self) -> Div {
+        let key_chip = |key: &'static str| {
+            div()
+                .min_w(px(64.))
+                .h(px(20.))
+                .px(px(6.))
+                .rounded(px(5.))
+                .border_1()
+                .border_color(hair())
+                .bg(side())
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    mono(8.)
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(ink())
+                        .whitespace_nowrap()
+                        .child(key),
+                )
+        };
+        let row = |key: &'static str, label: &'static str| {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(9.))
+                .child(key_chip(key))
+                .child(
+                    div()
+                        .font_family(UI)
+                        .text_size(px(10.5))
+                        .text_color(muted())
+                        .child(label),
+                )
+        };
+        let group = |title: &'static str, rows: Vec<(&'static str, &'static str)>| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(3.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.))
+                        .pb(px(3.))
+                        .child(caps(title, 7.5).text_color(ink()))
+                        .child(div().flex_1().h(px(1.)).bg(hair())),
+                )
+                .children(rows.into_iter().map(|(key, label)| row(key, label)))
+        };
+
+        let play = group(
+            "PLAY",
+            vec![
+                ("⌘D", "Hear the simulated MIDI keyboard"),
+                ("⌘P", "Practise a word or bigram"),
+                ("⌘T", "Tap tempo for the chord gate"),
+                ("⌘← / ⌘→", "Gate −10 / +10 ms"),
+                ("⌘↑ / ⌘↓", "Velocity +5 / −5"),
+                ("⌘L", "Cycle abc / ABC / 123"),
+                ("⌘[ / ⌘]", "Previous / next layout profile"),
+            ],
+        );
+        let text = group(
+            "TEXT",
+            vec![
+                ("⌘C", "Copy the transcript"),
+                ("⌘Z", "Undo the last edit"),
+                ("⌘K", "Clear the score · still undoable"),
+                ("⌫", "Delete a letter with a bend"),
+                ("Space", "Type a word gap"),
+                ("↵", "Accept the active completion"),
+                ("↑ / ↓", "Scrub completions"),
+                ("← / →", "Cycle the layer"),
+            ],
+        );
+        let view = group(
+            "VIEW",
+            vec![
+                ("Tab", "Huffman map"),
+                ("?", "Gesture sheet · click to play"),
+                ("⌘,", "MIDI Learn and input picker"),
+                ("⌘/", "This keyboard dialog"),
+                ("⌘1 … ⌘4", "Map / gestures / MIDI / keys"),
+            ],
+        );
+        let system = group(
+            "SYSTEM",
+            vec![
+                ("⌘⇧D", "Dark stage / paper stage"),
+                ("⌘⇧M", "Next MIDI input"),
+                ("⌘R", "Rescan MIDI inputs"),
+                ("⌘U", "Check for updates / install"),
+                ("Esc", "Close an overlay or cancel a remap"),
+                ("⌘Q", "Quit KeyChange"),
+            ],
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(14.))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_start()
+                    .gap(px(26.))
+                    .child(div().flex_1().flex().flex_col().gap(px(14.)).child(play).child(text))
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap(px(14.))
+                            .child(view)
+                            .child(system),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(7.))
+                    .pt(px(10.))
+                    .border_t_1()
+                    .border_color(hair())
+                    .child(div().size(px(4.)).rounded_full().bg(yellow()))
+                    .child(
+                        caps("SHORTCUTS WORK WHEN THE INSTRUMENT HAS FOCUS · ⌘ IS COMMAND ON MAC, CTRL ELSEWHERE", 6.5)
+                            .text_color(faint()),
+                    ),
             )
     }
 
@@ -3726,17 +4190,20 @@ impl KeyChangeApp {
                                 [
                                     ("⌘D", "DEMO"),
                                     ("⌘P", "PRACTICE"),
+                                    ("⌘T", "TAP"),
                                     ("⌘C", "COPY"),
                                     ("⌘Z", "UNDO"),
                                     ("⌘K", "CLEAR"),
                                     ("⌘,", "MIDI"),
+                                    ("⌘/", "KEYS"),
+                                    ("⌘⇧D", "THEME"),
                                     ("⌘U", "UPDATE"),
                                     ("TAB", "MAP"),
                                     ("?", "HELP"),
                                 ]
                                 .map(|(key, label)| {
                                     mono(7.)
-                                        .text_color(faint())
+                                        .text_color(muted())
                                         .child(format!("{key}  {label}"))
                                 }),
                             ),
@@ -3792,7 +4259,11 @@ fn piano_glyph(pcs: [i32; 3]) -> Div {
                 .w(px(3.))
                 .h(px(9.))
                 .rounded(px(0.5))
-                .bg(if pcs.contains(&pc) { yellow() } else { ink() }),
+                .bg(if pcs.contains(&pc) {
+                    yellow()
+                } else {
+                    glyph_black()
+                }),
         );
     }
 
@@ -3878,14 +4349,43 @@ impl Focusable for KeyChangeApp {
 }
 
 impl Render for KeyChangeApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Expire the short-lived notice without a timer.
         if let Some(notice) = &self.notice {
             if self.now().saturating_sub(notice.at) > 6_500 {
                 self.notice = None;
             }
         }
+        if let Some(ripple) = &self.ripple {
+            if ripple.started.elapsed().as_secs_f32() > 0.62 {
+                self.ripple = None;
+            }
+        }
         let overlay = self.overlay;
+        let ripple = self.ripple.as_ref().map(|ripple| {
+            let p = (ripple.started.elapsed().as_secs_f32() / 0.62).min(1.0);
+            let viewport = window.viewport_size();
+            let (w, h): (f32, f32) = (viewport.width.into(), viewport.height.into());
+            let (cx0, cy0) = ripple.center.unwrap_or((w * 0.86, h - 18.));
+            let reach = ((cx0.max(w - cx0)).powi(2) + (cy0.max(h - cy0)).powi(2)).sqrt() + 80.;
+            let radius = ease_out_cubic(p) * reach;
+            let alpha = if p < 0.55 {
+                0.96 * (p / 0.08).min(1.0)
+            } else {
+                0.96 * (1.0 - (p - 0.55) / 0.45).max(0.0)
+            };
+            div()
+                .absolute()
+                .left(px(cx0 - radius))
+                .top(px(cy0 - radius))
+                .w(px(radius * 2.0))
+                .h(px(radius * 2.0))
+                .rounded_full()
+                .bg(paper_at(self.dark))
+                .opacity(alpha)
+                .border_1()
+                .border_color(op(yellow(), 0.20))
+        });
         div()
             .flex()
             .flex_col()
@@ -3921,6 +4421,7 @@ impl Render for KeyChangeApp {
             )
             .child(self.status(cx))
             .when_some(overlay, |el, tab| el.child(self.overlay(tab, cx)))
+            .when_some(ripple, |el, ripple| el.child(ripple))
     }
 }
 

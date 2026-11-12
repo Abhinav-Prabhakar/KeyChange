@@ -1,6 +1,6 @@
 [package]
 name = "keychange-app"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "KeyChange — a MIDI text instrument. Play your words loud."
 license = "MIT"

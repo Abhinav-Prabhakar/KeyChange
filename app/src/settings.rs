@@ -26,6 +26,8 @@ pub struct Settings {
     pub cc_map: CcMap,
     /// Pinned MIDI input name; `None` follows the first available port.
     pub midi_device: Option<String>,
+    /// Dark stage. The palette still animates in from paper on first launch.
+    pub dark: bool,
 }
 
 impl Default for Settings {
@@ -39,6 +41,7 @@ impl Default for Settings {
             layer: Layer::Abc,
             cc_map: CcMap::default(),
             midi_device: None,
+            dark: false,
         }
     }
 }
@@ -54,6 +57,7 @@ impl Settings {
             layer: engine.layer,
             cc_map: engine.cc_map,
             midi_device: None,
+            dark: false,
         }
     }
 
@@ -154,9 +158,11 @@ mod tests {
         engine.duplicate_as_custom();
         engine.cc_map.assign(Control::Sustain, 80);
 
-        let saved = Settings::from_engine(&engine);
+        let mut saved = Settings::from_engine(&engine);
+        saved.dark = true;
         let text = saved.to_json().unwrap();
         let loaded = Settings::from_json(&text).unwrap();
+        assert!(loaded.dark);
         let mut fresh = Engine::new();
         loaded.apply_to(&mut fresh);
 

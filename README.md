@@ -90,6 +90,12 @@ Nothing is buried in a tab, a modal or a settings page. The transcript, staff, s
 
 Press **⌘D** for a simulated performance. It sends real MIDI bytes through the exact same parser as a physical keyboard, so you can hear and see everything before plugging anything in.
 
+### Two stages, one instrument
+
+<img src="app/assets/screenshot-dark.png" alt="KeyChange in dark mode after a simulated performance: warm charcoal surfaces, the same yellow chord tile and blue accent notes, and a full transcript" width="100%">
+
+Press **⌘⇧D** or click the moon in the status bar. A ripple of the incoming stage spreads across the window while every surface, border and shadow crossfades. Contrast is tuned per stage — ink flips to warm white, the yellow stays yellow, and anything sitting on yellow keeps a fixed dark ink. The choice survives a relaunch.
+
 ### The map: why these letters?
 
 <img src="app/assets/screenshot-map.png" alt="The Map overlay showing the fifteen letter keys with effort bars, the active Default profile, a 100% quality score, Duplicate and Remap buttons" width="100%">
@@ -100,7 +106,13 @@ Press **Tab**. Every key shows its letter frequency and its physical effort, sco
 
 <img src="app/assets/screenshot-gestures.png" alt="The Gestures overlay grouped into banks: main word chords, the low octave bank, twelve extra triads, up and down intervals, high-octave bigrams and every keyboard shortcut" width="100%">
 
-Press **?** for the cheat sheet: word chords, interval bigrams, and every shortcut in one card. Nothing to memorize, nothing to hunt for.
+Press **?** for the cheat sheet: word chords, interval bigrams, and the everyday shortcuts in one card. Nothing to memorize, nothing to hunt for.
+
+### Every shortcut in one dialog
+
+<img src="app/assets/screenshot-keys-dialog.png" alt="The Keys dialog listing every binding in four groups: play, text, view and system" width="100%">
+
+Press **⌘/** for the full list, grouped into **Play**, **Text**, **View** and **System**. The same card is one click away as **KEYS** in the status bar, so nothing depends on remembering a hidden binding.
 
 ### Practice, audition, and stay current
 
@@ -160,7 +172,17 @@ No piano? The app is fully playable from the laptop.
 | `Tab` | Open / close the map |
 | `?` | Open / close the gesture sheet |
 | `⌘,` | Open / close MIDI Learn |
+| `⌘/` | Every keyboard shortcut |
 | `⌘P` | Start / stop practice |
+| `⌘T` | Tap tempo for the chord gate |
+| `⌘←` / `⌘→` | Gate −10 / +10 ms |
+| `⌘↑` / `⌘↓` | Velocity +5 / −5 |
+| `⌘L` | Cycle `abc` / `ABC` / `123` |
+| `⌘[` / `⌘]` | Previous / next layout profile |
+| `⌘1`–`⌘4` | Map / gestures / MIDI / keys |
+| `⌘⇧D` | Dark stage / paper stage |
+| `⌘⇧M` | Next MIDI input |
+| `⌘R` | Rescan MIDI inputs |
 | `⌘U` | Check for updates / install one |
 | `⌘D` | Start / stop the simulated performance |
 | `⌘C` | Copy the transcript |
@@ -292,7 +314,7 @@ Read [`app/README.md`](app/README.md) for the architecture, the full gesture map
 
 ## Release notes
 
-Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.5.0**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
+Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.6.0**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

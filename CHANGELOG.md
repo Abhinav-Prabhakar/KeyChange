@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0 — 2026-11-12
+
+Two stages, one instrument.
+
+**New**
+- **Dark stage** (`⌘⇧D`, or the moon in the status bar). Warm charcoal surfaces,
+  the same yellow and blue accents, and a crossfade on every colour. A ripple
+  of the incoming stage spreads from wherever you toggled it. The choice is
+  remembered across launches.
+- **Every shortcut in one dialog** (`⌘/`, or **KEYS** in the status bar),
+  grouped into Play, Text, View and System.
+- **New shortcuts**: tap tempo (`⌘T`), gate nudge (`⌘←` / `⌘→`), velocity
+  (`⌘↑` / `⌘↓`), layer cycle (`⌘L`), previous/next profile (`⌘[` / `⌘]`),
+  panel jumps (`⌘1`–`⌘4`), next MIDI input (`⌘⇧M`), MIDI rescan (`⌘R`).
+- Text on yellow keeps a fixed dark ink in both stages, so the chord pads, the
+  NOW tile and the selected chips stay readable when the stage flips.
+
+**Changed**
+- The status bar carries DARK/PAPER and KEYS chips.
+- The gesture footer lists the new bindings and uses a brighter hint colour.
+- Key separators, hover washes and the slide-rule highlights have dark-stage
+  variants instead of reusing the paper values.
+
 ## 0.5.0 — 2026-11-12
 
 The instrument learns you back.
