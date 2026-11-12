@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.1 — 2026-11-12
+
+The gesture sheet, redrawn.
+
+**Changed**
+- Every word chord in the Gestures tab now carries a miniature keyboard with its
+  three keys lit, and every bigram gets a dot ruler: the slope shows the
+  direction, the number of dots shows the interval. The old note-name and
+  semitone labels are gone.
+- The sheet is arranged in aligned banks — six main pads, six low, twelve sharp
+  and minor, then up, down and high intervals — with a rule and a count for each
+  family.
+- The deck hint and the status bar now share the same right edge.
+- The gesture, map, MIDI, empty and performance screenshots were refreshed.
+
 ## 0.4.0 — 2026-11-12
 
 More words, more bigrams, same keyboard.

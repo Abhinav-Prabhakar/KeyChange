@@ -12,7 +12,7 @@ use gpui::{
 use crate::engine::{
     chord_pads, freq_for, note_name, Control, Engine, KeyKind, Layer, Pedal, BIGRAM_COUNT,
     BLACK_MIDI, BLACK_SLOTS, DEFAULT_LETTERS, EXTRA_TRIADS, INTERVALS, INTERVALS_DOWN,
-    INTERVALS_HIGH, WHITE_MIDI, WORDS_LOW, WORD_CHORD_COUNT,
+    INTERVALS_HIGH, WHITE_MIDI, WORDS, WORDS_LOW, WORD_CHORD_COUNT, WORD_TRIADS,
 };
 use crate::midi::{self, MidiHub, MidiMsg, MidiStatus, Packet, Source};
 use crate::settings::Settings;
@@ -2076,7 +2076,7 @@ impl KeyChangeApp {
             .flex_row()
             .items_center()
             .justify_between()
-            .px(px(16.))
+            .px(px(22.))
             .border_t_1()
             .border_color(hair())
             .child(
@@ -2777,165 +2777,154 @@ impl KeyChangeApp {
     }
 
     fn gestures_body(&self) -> Div {
-        let word_chip = |text: String| {
+        let word_tile = |pcs: [i32; 3], word: String| {
             div()
-                .w(px(86.))
-                .px(px(5.))
-                .py(px(3.))
-                .rounded(px(5.))
-                .bg(side())
-                .child(mono(8.).text_color(ink()).child(text))
+                .w(px(96.))
+                .h(px(24.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(7.))
+                .child(piano_glyph(pcs))
+                .child(
+                    div()
+                        .font_family(UI)
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_size(px(11.))
+                        .text_color(ink())
+                        .child(word),
+                )
         };
-        let interval_chip = |text: String| {
+        let interval_tile = |semi: i32, down: bool, text: String| {
             div()
-                .w(px(82.))
-                .px(px(5.))
-                .py(px(3.))
-                .rounded(px(5.))
-                .bg(side())
-                .child(mono(8.).text_color(ink()).child(text))
+                .w(px(148.))
+                .h(px(22.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(9.))
+                .child(interval_glyph(semi, down))
+                .child(
+                    div()
+                        .font_family(MONO)
+                        .font_weight(FontWeight::BOLD)
+                        .text_size(px(9.))
+                        .text_color(ink())
+                        .child(text),
+                )
         };
+        let group = |label: &'static str, grid: Div| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(caps(label, 7.).text_color(faint()))
+                .child(grid)
+        };
+        let heading = |label: &'static str, count: String| {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(9.))
+                .child(caps(label, 8.).text_color(ink()))
+                .child(div().flex_1().h(px(1.)).bg(hair()))
+                .child(caps(count, 6.5).text_color(faint()))
+        };
+        let grid = || div().flex().flex_row().flex_wrap().gap(px(5.));
 
-        let mut chords = div().flex().flex_col().gap(px(4.));
-        for (i, pad) in chord_pads().iter().enumerate() {
-            chords = chords.child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(9.))
-                    .child(triad_diagram(i, false))
-                    .child(
-                        div()
-                            .font_family(UI)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_size(px(11.5))
-                            .text_color(ink())
-                            .child(pad.word),
-                    )
-                    .child(div().flex_1())
-                    .child(mono(7.5).text_color(faint()).child(format!(
-                        "{} {} {}",
-                        note_name(pad.notes[0]),
-                        note_name(pad.notes[1]),
-                        note_name(pad.notes[2])
-                    ))),
-            );
+        let mut main = grid();
+        for (i, word) in WORDS.iter().enumerate() {
+            main = main.child(word_tile(WORD_TRIADS[i], (*word).to_string()));
         }
-
-        let mut low = div().flex().flex_row().flex_wrap().gap(px(4.));
+        let mut low = grid();
         for (i, word) in WORDS_LOW.iter().enumerate() {
-            let notes = chord_pads()[i].notes.map(|n| n - 12);
-            low = low.child(word_chip(format!(
-                "{} {} {} · {word}",
-                note_name(notes[0]),
-                note_name(notes[1]),
-                note_name(notes[2])
-            )));
+            low = low.child(word_tile(WORD_TRIADS[i], (*word).to_string()));
         }
-
-        let mut extra = div().flex().flex_row().flex_wrap().gap(px(4.));
-        for (_, root, word) in EXTRA_TRIADS {
-            extra = extra.child(word_chip(format!("{root} · {word}")));
+        let mut extra = grid();
+        for (pcs, _, word) in EXTRA_TRIADS {
+            extra = extra.child(word_tile(pcs, word.to_string()));
         }
-
-        let mut up = div().flex().flex_row().flex_wrap().gap(px(4.));
+        let mut up = grid();
         for (semi, text) in INTERVALS {
-            up = up.child(interval_chip(format!("↑{semi} · {text}")));
+            up = up.child(interval_tile(semi, false, text.to_string()));
         }
-        let mut down = div().flex().flex_row().flex_wrap().gap(px(4.));
+        let mut down = grid();
         for (semi, text) in INTERVALS_DOWN {
-            down = down.child(interval_chip(format!("↓{semi} · {text}")));
+            down = down.child(interval_tile(semi, true, text.to_string()));
         }
-        let mut high = div().flex().flex_row().flex_wrap().gap(px(4.));
+        let mut high = grid();
         for (semi, text) in INTERVALS_HIGH {
-            high = high.child(interval_chip(format!("{semi} · {text}")));
+            high = high.child(interval_tile(semi, false, text.to_string()));
         }
+
+        let pedal_chip = |icon: &'static str, label: &'static str| {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(4.))
+                .child(mono(9.).text_color(ink()).child(icon))
+                .child(caps(label, 7.).text_color(faint()))
+        };
 
         div()
             .flex()
             .flex_col()
-            .gap(px(14.))
+            .gap(px(10.))
+            .child(heading("WORDS", format!("{WORD_CHORD_COUNT} CHORDS")))
+            .child(group("SIX MAIN PADS · C3–C5", main))
+            .child(group("ONE OCTAVE LOWER · C2–B2", low))
+            .child(group("SHARPS AND MINORS", extra))
+            .child(heading("BIGRAMS", format!("{BIGRAM_COUNT} INTERVALS")))
+            .child(group("SECOND NOTE HIGHER", up))
+            .child(group("SECOND NOTE LOWER", down))
+            .child(group("ABOVE C5", high))
             .child(
                 div()
                     .flex()
-                    .flex_row()
-                    .gap(px(22.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap(px(6.))
-                            .child(caps("WORD CHORDS · C3–C5", 8.))
-                            .child(chords)
-                            .child(caps("LOW OCTAVE · C2–B2", 8.))
-                            .child(low)
-                            .child(caps("EXTRA TRIADS · SHARPS AND MINORS", 8.))
-                            .child(extra),
-                    )
-                    .child(div().w(px(1.)).bg(hair()))
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap(px(6.))
-                            .child(caps("INTERVALS ↑ · SECOND NOTE HIGHER", 8.))
-                            .child(up)
-                            .child(caps("INTERVALS ↓ · SECOND NOTE LOWER", 8.))
-                            .child(down)
-                            .child(caps("HIGH OCTAVE · ABOVE C5", 8.))
-                            .child(high),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(12.))
-                    .pt(px(10.))
-                    .border_t_1()
-                    .border_color(hair())
-                    .child(caps("SHORTCUTS", 7.))
-                    .children(
-                        [
-                            ("⌘D", "DEMO"),
-                            ("⌘C", "COPY"),
-                            ("⌘Z", "UNDO"),
-                            ("⌘K", "CLEAR"),
-                            ("⌘,", "MIDI LEARN"),
-                            ("TAB", "MAP"),
-                            ("?", "HELP"),
-                        ]
-                        .map(|(key, label)| {
-                            mono(7.5)
-                                .text_color(faint())
-                                .child(format!("{key}  {label}"))
-                        }),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(16.))
-                    .pt(px(10.))
+                    .flex_col()
+                    .gap(px(7.))
+                    .pt(px(9.))
                     .border_t_1()
                     .border_color(hair())
                     .child(
-                        mono(8.)
-                            .text_color(faint())
-                            .child("SUSTAIN = SPACE · SOFT = LAYER · SOSTENUTO = DELETE WORD"),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(11.))
+                            .child(caps("KEYS", 6.5).text_color(faint()))
+                            .children(
+                                [
+                                    ("⌘D", "DEMO"),
+                                    ("⌘C", "COPY"),
+                                    ("⌘Z", "UNDO"),
+                                    ("⌘K", "CLEAR"),
+                                    ("⌘,", "MIDI"),
+                                    ("TAB", "MAP"),
+                                    ("?", "HELP"),
+                                ]
+                                .map(|(key, label)| {
+                                    mono(7.)
+                                        .text_color(faint())
+                                        .child(format!("{key}  {label}"))
+                                }),
+                            ),
                     )
-                    .child(div().flex_1())
                     .child(
-                        mono(8.)
-                            .text_color(faint())
-                            .child("WHEEL = COMPLETE · AFTERTOUCH = ACCEPT"),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(14.))
+                            .child(caps("PEDALS", 6.5).text_color(faint()))
+                            .child(pedal_chip("⌣", "SPACE"))
+                            .child(pedal_chip("◐", "LAYER"))
+                            .child(pedal_chip("⌫", "WORD"))
+                            .child(pedal_chip("↻", "COMPLETE"))
+                            .child(pedal_chip("◉", "ACCEPT")),
                     ),
             )
     }
@@ -2946,6 +2935,77 @@ fn qwerty_hint(i: usize) -> &'static str {
         "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "1", "2", "3", "4",
     ];
     HINTS[i.min(14)]
+}
+
+/// A miniature keyboard octave with the chord's three keys lit.
+fn piano_glyph(pcs: [i32; 3]) -> Div {
+    const WHITE_PC: [i32; 7] = [0, 2, 4, 5, 7, 9, 11];
+    const BLACK: [(i32, f32); 5] = [(1, 0.), (3, 1.), (6, 3.), (8, 4.), (10, 5.)];
+    let white_w = 38.0 / 7.0;
+
+    let mut whites = div().flex().flex_row().w(px(38.)).h_full();
+    for pc in WHITE_PC {
+        whites = whites.child(
+            div()
+                .w(px(white_w - 0.7))
+                .mr(px(0.7))
+                .h_full()
+                .bg(if pcs.contains(&pc) { yellow() } else { side() }),
+        );
+    }
+
+    let mut blacks = div().absolute().top(px(0.)).left(px(0.)).size_full();
+    for (pc, after) in BLACK {
+        blacks = blacks.child(
+            div()
+                .absolute()
+                .top(px(0.))
+                .left(px((after + 1.) * white_w - 1.5))
+                .w(px(3.))
+                .h(px(9.))
+                .rounded(px(0.5))
+                .bg(if pcs.contains(&pc) { yellow() } else { ink() }),
+        );
+    }
+
+    div()
+        .relative()
+        .w(px(38.))
+        .h(px(19.))
+        .border_1()
+        .border_color(op(ink(), 0.18))
+        .rounded(px(2.))
+        .overflow_hidden()
+        .child(whites)
+        .child(blacks)
+}
+
+/// An interval as a sloped dot ruler: one mark per semitone, heavier at both
+/// notes. The slope is the direction of the gesture.
+fn interval_glyph(semi: i32, down: bool) -> Div {
+    let steps = semi.clamp(1, 12);
+    let (w, h, big) = (54.0_f32, 16.0_f32, 3.5_f32);
+    let mut plot = div().relative().w(px(w)).h(px(h));
+    // n semitones are n steps, so n + 1 marks: both notes plus the gaps.
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let end = i == 0 || i == steps;
+        let size = if end { big } else { 2.0 };
+        let track = if down { t } else { 1.0 - t };
+        let center = big / 2.0 + track * (h - big);
+        let x = i as f32 * ((w - big) / 12.0);
+        plot = plot.child(
+            div()
+                .absolute()
+                .left(px(x))
+                .top(px(center - size / 2.0))
+                .w(px(size))
+                .h(px(size))
+                .rounded_full()
+                .bg(if end { op(ink(), 1.0) } else { op(ink(), 0.28) }),
+        );
+    }
+    plot
 }
 
 fn triad_diagram(index: usize, active: bool) -> Div {

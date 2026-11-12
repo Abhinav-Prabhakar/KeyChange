@@ -272,7 +272,7 @@ Read [`app/README.md`](app/README.md) for the architecture, the full gesture map
 
 ## Release notes
 
-Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.4.0**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
+Every download lives on **[GitHub Releases](https://github.com/Abhinav-Prabhakar/KeyChange/releases)**. The current build is **0.4.1**; the full history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
